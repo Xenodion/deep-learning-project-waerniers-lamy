@@ -23,8 +23,9 @@ Can be loaded from the attached Python File
 
 ## DELIVERABLE
 - A feed-forward network in PyTorch for artwork classification
--  Training monitoring and failure diagnosis
+- Training monitoring and failure diagnosis
 - A pretrained CNN (ResNet) for image classification
+- Deadline is for the 30th of October 2026
 
 The Source Code must be delivered with Clear Git History on Github or Gitlab.
 
