@@ -1,5 +1,7 @@
 # Project related
 notebooks/data/
+# WikiArt subsets: licence "unknown", never commit the images (see make_wikiart_subset.py)
+data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
