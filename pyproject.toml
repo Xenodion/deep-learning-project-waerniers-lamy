@@ -1,0 +1,22 @@
+[project]
+name = "deep-learning-project-waerniers-lamy"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Xenodion", email = "alexandre.waerniers@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "ipykernel>=7.4.0",
+    "numpy>=2.4.6",
+    "pandas>=3.0.6",
+    "torch>=2.14.1",
+]
+
+[project.scripts]
+deep-learning-project-waerniers-lamy = "deep_learning_project_waerniers_lamy:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
