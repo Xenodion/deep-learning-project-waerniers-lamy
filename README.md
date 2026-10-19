@@ -18,9 +18,10 @@ course: networks built from PyTorch primitives rather than library magic, every 
 backed by evidence. The project is mutualised: the scenario and the assessment format (Git deliverable, group oral
 defence, individual deliberation, peer review) are shared at programme level
 
-## DATA : Can be loaded from the attached Python File
+## DATA
+Can be loaded from the attached Python File
 
-## DELIVERABLE : 
+## DELIVERABLE
 - A feed-forward network in PyTorch for artwork classification
 -  Training monitoring and failure diagnosis
 - A pretrained CNN (ResNet) for image classification
