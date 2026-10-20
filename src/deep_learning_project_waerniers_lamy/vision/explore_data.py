@@ -6,7 +6,7 @@ be re-checked with one command. Nothing is written to disk.
 
 USAGE
 -----
-    python src/deep_learning_project_waerniers_lamy/explore_data.py data/wikiart_genre5
+    python src/deep_learning_project_waerniers_lamy/vision/explore_data.py data/wikiart_genre5
 
 Reads ``metadata.csv`` and ``subset_info.json`` (written by make_wikiart_subset.py) and the JPEG files next to
 them. Standard library only; if Pillow is installed it also checks that every image is a 224 x 224 RGB file.
