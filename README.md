@@ -40,18 +40,18 @@ Files marked *(planned)* are not written yet. Decisions and their evidence are i
 ├── pyproject.toml, uv.lock               # dependencies, managed with uv
 ├── adr/                                  # architecture decision records: why we made each choice
 ├── lectures/                             # course slides and notes
-├── notebooks/                            # course practicals TP01 to TP06
+├── notebooks/                            # course practicals TP01 to TP08, and our project notebooks (P01, ...)
+│   ├── P01_explore_data.ipynb            # what the downloaded data is (figures quoted in the ADRs)
+│   └── P02_monitor_and_diagnose.ipynb    # (planned) learning curves, confusion matrix, failure diagnosis
 ├── data/                                 # downloaded images and split.csv (ignored by Git, never committed)
 └── src/deep_learning_project_waerniers_lamy/
     ├── vision/                           # computer vision: the genre classifier
     │   ├── make_wikiart_subset.py        # downloads the 5-genre subset (course script, unchanged)
-    │   ├── explore_data.py               # report on the downloaded data (figures quoted in the ADRs)
     │   ├── make_split.py                 # museum A (train, validation) and museum B (test) -> split.csv
     │   ├── dataset.py                    # (planned) reads split.csv; the transform is a parameter
     │   ├── dense_model.py                # (planned) the feed-forward network
     │   ├── train_loop.py                 # (planned) one epoch of training, evaluation, best-model checkpoint
     │   ├── train_dense.py                # (planned) entry point for the dense baseline
-    │   ├── plots.py                      # (planned) learning curves, confusion matrix
     │   ├── resnet_model.py               # (planned) pretrained ResNet with a new 5-class head
     │   ├── train_resnet.py               # (planned) entry point for transfer learning
     │   ├── classical_baseline.py         # (planned) the non-neural comparison for the director
@@ -59,13 +59,15 @@ Files marked *(planned)* are not written yet. Decisions and their evidence are i
     └── nlp/                              # natural-language part, deferred (ADR 0004)
 ```
 
-Conventions: one job per file, kept short. Files that only define things (`dataset.py`, `*_model.py`,
-`train_loop.py`) are imported by the short entry points (`train_*.py`, `evaluate_test.py`) that we run.
+Conventions: exploration, plots and diagnosis are in notebooks; the `.py` files are things we run or import, one job
+per file, kept short. Files that only define things (`dataset.py`, `*_model.py`, `train_loop.py`) are imported by the
+short entry points (`train_*.py`, `evaluate_test.py`) that we run.
 
 Reproduce the data (from the repository root):
 
 ```
 python src/deep_learning_project_waerniers_lamy/vision/make_wikiart_subset.py --label genre --classes portrait landscape cityscape still_life religious_painting --per-class 600 --size 224 --out data/wikiart_genre5
-python src/deep_learning_project_waerniers_lamy/vision/explore_data.py data/wikiart_genre5
-python src/deep_learning_project_waerniers_lamy/vision/make_split.py data/wikiart_genre5
+python src/deep_learning_project_waerniers_lamy/vision/make_split.py
 ```
+
+Then open `notebooks/P01_explore_data.ipynb` to look at the data.
