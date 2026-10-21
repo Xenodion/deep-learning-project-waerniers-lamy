@@ -17,7 +17,7 @@ predicts 49% of all images.
 
 WikiArt has no museum field, but `metadata.csv` has the `artist`. Of the 3,000 images, 1,393 have a named artist
 (102 artists) and 1,607 are "Unknown Artist", a catch-all for many different painters that cannot be told apart. All figures about the images come from the
-notebook `notebooks/P01_explore_data.ipynb`. The subset has no duplicated image.
+notebook `notebooks/vision/P01_explore_data.ipynb`. The subset has no duplicated image.
 
 **Decision.** We will split the images into two fictional museums:
 
