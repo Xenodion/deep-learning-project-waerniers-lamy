@@ -9,6 +9,7 @@ Short notes on **why** we made each significant choice, so we can defend it at t
 | [0002](0002-classification-target-and-dataset-subset.md) | 5 genres, 600 images each, 224 px | Accepted |
 | [0003](0003-simulated-museum-b-test-set.md) | Train in museum A, test once in simulated museum B | Accepted |
 | [0004](0004-focus-on-genre-classifier.md) | Focus on the genre classifier; leave the language feature for later | Accepted |
+| [0005](0005-nlp-bonus-by-ladder.md) | Language feature as a bonus, built one rung at a time | Accepted |
 
 ## Still to decide
 

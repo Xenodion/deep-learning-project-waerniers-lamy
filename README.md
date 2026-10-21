@@ -39,10 +39,15 @@ Files marked *(planned)* are not written yet. Decisions and their evidence are i
 ├── README.md
 ├── pyproject.toml, uv.lock               # dependencies, managed with uv
 ├── adr/                                  # architecture decision records: why we made each choice
-├── lectures/                             # course slides and notes
-├── notebooks/                            # course practicals TP01 to TP08, and our project notebooks (P01, ...)
-│   ├── P01_explore_data.ipynb            # what the downloaded data is (figures quoted in the ADRs)
-│   └── P02_monitor_and_diagnose.ipynb    # (planned) learning curves, confusion matrix, failure diagnosis
+├── course/                               # the teacher's material, read-only
+│   ├── lectures/                         # course slides and notes
+│   └── practicals/                       # course practicals TP01 to TP08
+├── notebooks/                            # our project notebooks
+│   ├── vision/
+│   │   ├── P01_explore_data.ipynb        # what the downloaded data is (figures quoted in the ADRs)
+│   │   └── P02_monitor_and_diagnose.ipynb  # (planned) learning curves, confusion matrix, failure diagnosis
+│   └── nlp/
+│       └── NLP01_metadata_retrieval.ipynb  # BM25 vs pretrained sentence encoder, on metadata
 ├── data/                                 # downloaded images and split.csv (ignored by Git, never committed)
 └── src/deep_learning_project_waerniers_lamy/
     ├── vision/                           # computer vision: the genre classifier
@@ -56,7 +61,9 @@ Files marked *(planned)* are not written yet. Decisions and their evidence are i
     │   ├── train_resnet.py               # (planned) entry point for transfer learning
     │   ├── classical_baseline.py         # (planned) the non-neural comparison for the director
     │   └── evaluate_test.py              # (planned) scores a finished model on museum B
-    └── nlp/                              # natural-language part, deferred (ADR 0004)
+    └── nlp/                              # natural-language bonus (ADR 0005)
+        ├── EXPERIMENT_PLAN.md            # ladder of methods, predictions, evaluation protocol
+        └── utils.py                      # load_paintings (shared split), ranking metrics, image grid
 ```
 
 Conventions: exploration, plots and diagnosis are in notebooks; the `.py` files are things we run or import, one job
@@ -70,4 +77,4 @@ python src/deep_learning_project_waerniers_lamy/vision/make_wikiart_subset.py --
 python src/deep_learning_project_waerniers_lamy/vision/make_split.py
 ```
 
-Then open `notebooks/P01_explore_data.ipynb` to look at the data.
+Then open `notebooks/vision/P01_explore_data.ipynb` to look at the data.

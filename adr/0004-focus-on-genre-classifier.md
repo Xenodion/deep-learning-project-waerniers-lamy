@@ -1,6 +1,6 @@
 # 0004. Focus on the genre classifier; leave the language feature for later
 
-- **Status:** Accepted
+- **Status:** Accepted (the language part is revisited as a bonus in [0005](0005-nlp-bonus-by-ladder.md))
 - **Date:** 2026-10-20
 
 **Context.** The brief describes two features (recognise a painting, answer questions in natural language), but the
