@@ -40,34 +40,32 @@ Files marked *(planned)* are not written yet. Decisions and their evidence are i
 ├── pyproject.toml, uv.lock               # dependencies, managed with uv
 ├── adr/                                  # architecture decision records: why we made each choice
 ├── lectures/                             # course slides and notes
-├── notebooks/                            # course practicals TP01 to TP08, and our project notebooks (P01, ...)
-│   ├── P01_explore_data.ipynb            # what the downloaded data is (figures quoted in the ADRs)
-│   └── P02_monitor_and_diagnose.ipynb    # (planned) learning curves, confusion matrix, failure diagnosis
+├── notebooks/                            # course practicals TP01 to TP08
 ├── data/                                 # downloaded images and split.csv (ignored by Git, never committed)
+├── results/                              # one pickle per experiment (settings, curves, scores); weights (.pt) are ignored
 └── src/deep_learning_project_waerniers_lamy/
     ├── vision/                           # computer vision: the genre classifier
     │   ├── make_wikiart_subset.py        # downloads the 5-genre subset (course script, unchanged)
-    │   ├── make_split.py                 # museum A (train, validation) and museum B (test) -> split.csv
-    │   ├── dataset.py                    # (planned) reads split.csv; the transform is a parameter
-    │   ├── dense_model.py                # (planned) the feed-forward network
-    │   ├── train_loop.py                 # (planned) one epoch of training, evaluation, best-model checkpoint
-    │   ├── train_dense.py                # (planned) entry point for the dense baseline
-    │   ├── resnet_model.py               # (planned) pretrained ResNet with a new 5-class head
-    │   ├── train_resnet.py               # (planned) entry point for transfer learning
-    │   ├── classical_baseline.py         # (planned) the non-neural comparison for the director
-    │   └── evaluate_test.py              # (planned) scores a finished model on museum B
+    │   ├── utils.py                      # functions shared by all notebooks (make_split, load_data, fit, save_result)
+    │   ├── P01_explore_data.ipynb        # what the downloaded data is (figures quoted in the ADRs)
+    │   ├── P02_dense_baseline.ipynb      # the dense network that every other model is compared with
+    │   ├── P03_regularisation.ipynb      # (planned) fighting the overfitting, failure diagnosis
+    │   ├── P04_resnet_transfer.ipynb     # (planned) pretrained ResNet, transfer learning
+    │   ├── P05_classical_and_comparison.ipynb  # (planned) classical baseline, all results side by side
+    │   └── run_final.py                  # (planned) loads the chosen model and scores it once on museum B
     └── nlp/                              # natural-language part, deferred (ADR 0004)
 ```
 
-Conventions: exploration, plots and diagnosis are in notebooks; the `.py` files are things we run or import, one job
-per file, kept short. Files that only define things (`dataset.py`, `*_model.py`, `train_loop.py`) are imported by the
-short entry points (`train_*.py`, `evaluate_test.py`) that we run.
+Conventions: all the tryouts are notebooks (`vision/P0x_*.ipynb`). They share one pipeline so that results can be
+compared: `utils.py` prepares the data (`load_data`), trains (`fit`) and records each experiment in `results/`
+(`save_result`). When a model is chosen, `run_final.py` reproduces its score on the test set for the grader. The notebooks never use
+the test set (ADR 0003). Run a notebook with the project's `.venv` as kernel.
 
 Reproduce the data (from the repository root):
 
 ```
 python src/deep_learning_project_waerniers_lamy/vision/make_wikiart_subset.py --label genre --classes portrait landscape cityscape still_life religious_painting --per-class 600 --size 224 --out data/wikiart_genre5
-python src/deep_learning_project_waerniers_lamy/vision/make_split.py
+python -c "from deep_learning_project_waerniers_lamy.vision.utils import make_split; make_split()"
 ```
 
-Then open `notebooks/P01_explore_data.ipynb` to look at the data.
+Then open `P01_explore_data.ipynb` to look at the data, and `P02_dense_baseline.ipynb` to train the baseline.

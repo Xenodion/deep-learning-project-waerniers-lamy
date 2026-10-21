@@ -22,4 +22,4 @@ of Git (`data/` is ignored). The exact command is in `data/wikiart_genre5/subset
 blaming the network. 600 per class is enough for a pretrained ResNet but modest for the dense baseline. The centre
 crop to a square keeps a median 75% of each painting (worst case 28%), so wide or tall paintings lose their edges.
 Download figures come from `make_wikiart_subset.py --dry-run`; figures about the downloaded images come from
-the notebook `notebooks/P01_explore_data.ipynb`.
+the notebook `vision/P01_explore_data.ipynb`.
