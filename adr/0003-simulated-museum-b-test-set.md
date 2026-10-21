@@ -16,9 +16,8 @@ the genre of 70% of the named-artist images (leave-one-out majority vote, chance
 predicts 49% of all images.
 
 WikiArt has no museum field, but `metadata.csv` has the `artist`. Of the 3,000 images, 1,393 have a named artist
-(102 artists) and 1,607 are "Unknown Artist", a catch-all for many different painters that cannot be told apart. All figures about the images come from
-`python src/deep_learning_project_waerniers_lamy/vision/explore_data.py data/wikiart_genre5`. The subset has no duplicated
-image.
+(102 artists) and 1,607 are "Unknown Artist", a catch-all for many different painters that cannot be told apart. All figures about the images come from the
+notebook `vision/P01_explore_data.ipynb`. The subset has no duplicated image.
 
 **Decision.** We will split the images into two fictional museums:
 
@@ -43,8 +42,7 @@ The rules, in plain words:
   stopping, tuning, diagnosis and model choice use validation(A), never B. If B reveals a problem, we report it as a
   finding; fixing the model and re-testing on B would make B a tuning set, and we would say so.
 - The split is saved as a file (image id to train, validation or test) made by a committed script. The figures above
-  are its output (seed 0, identical on every run):
-  `python src/deep_learning_project_waerniers_lamy/vision/make_split.py data/wikiart_genre5`.
+  are its output (seed 0, identical on every run): the function `make_split()` in `vision/utils.py`.
 
 **Rejected.** Random test split (no shift to measure); using B for model selection (it would stop being a test).
 

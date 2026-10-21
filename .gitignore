@@ -2,6 +2,8 @@
 notebooks/data/
 # WikiArt subsets: licence "unknown", never commit the images (see make_wikiart_subset.py)
 data/
+# Model weights are big: we commit the results pickles (metrics) but not the weights
+results/*.pt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
