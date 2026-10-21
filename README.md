@@ -39,10 +39,8 @@ Files marked *(planned)* are not written yet. Decisions and their evidence are i
 ├── README.md
 ├── pyproject.toml, uv.lock               # dependencies, managed with uv
 ├── adr/                                  # architecture decision records: why we made each choice
-├── lectures/                             # course slides and notes
-├── notebooks/                            # course practicals TP01 to TP08
 ├── data/                                 # downloaded images and split.csv (ignored by Git, never committed)
-├── results/                              # one pickle per experiment (settings, curves, scores); weights (.pt) are ignored
+├── results/                              # one dated pickle per run + experiments.csv (settings and scores of every run)
 └── src/deep_learning_project_waerniers_lamy/
     ├── vision/                           # computer vision: the genre classifier
     │   ├── make_wikiart_subset.py        # downloads the 5-genre subset (course script, unchanged)
@@ -58,8 +56,10 @@ Files marked *(planned)* are not written yet. Decisions and their evidence are i
 
 Conventions: all the tryouts are notebooks (`vision/P0x_*.ipynb`). They share one pipeline so that results can be
 compared: `utils.py` prepares the data (`load_data`), trains (`fit`) and records each experiment in `results/`
-(`save_result`). When a model is chosen, `run_final.py` reproduces its score on the test set for the grader. The notebooks never use
-the test set (ADR 0003). Run a notebook with the project's `.venv` as kernel.
+(`save_result`). Every run is a row of `results/experiments.csv` (settings and validation scores). Its test columns
+stay empty until the model is final: `add_test_score` then fills them, once per run (ADR 0003), and refuses a second
+test. When a model is chosen, `run_final.py` reproduces its test score for the grader. Run a notebook with the project's
+`.venv` as kernel.
 
 Reproduce the data (from the repository root):
 

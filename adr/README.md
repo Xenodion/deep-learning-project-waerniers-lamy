@@ -9,11 +9,11 @@ Short notes on **why** we made each significant choice, so we can defend it at t
 | [0002](0002-classification-target-and-dataset-subset.md) | 5 genres, 600 images each, 224 px | Accepted |
 | [0003](0003-simulated-museum-b-test-set.md) | Train in museum A, test once in simulated museum B | Accepted |
 | [0004](0004-focus-on-genre-classifier.md) | Focus on the genre classifier; leave the language feature for later | Accepted |
+| [0006](0006-dense-baseline.md) | Keep the dense baseline simple and unchanged: 32 px, one hidden layer of 128 | Proposed |
 
 ## Still to decide
 
-- Input representation (image size for the dense net, standardisation)
-- Dense baseline architecture and training loop (tag m1)
+- Image size for the dense network (32 px is a first choice, not compared with 64 px)
 - Regularisation and monitoring protocol (tag m2)
 - Pretrained ResNet: variant, frozen or fine-tuned
 - Classical baseline and the production recommendation (neural network or not)

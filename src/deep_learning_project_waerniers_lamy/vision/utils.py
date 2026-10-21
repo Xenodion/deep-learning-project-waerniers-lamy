@@ -1,13 +1,8 @@
-"""Everything the notebooks share, in one file: split, data, training loop and results.
-
-    from deep_learning_project_waerniers_lamy.vision.utils import load_data, fit, save_result, summary
-
-Using the same functions in every notebook keeps the experiments comparable.
-"""
 import copy
 import pickle
 import random
 import time
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -141,7 +136,7 @@ def evaluate(model, X, y, batch_size=256):
     return total_loss / len(X), correct / len(X)
 
 
-def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0):
+def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0, verbose=True):
     """Train the model on data["X_train"] and keep the weights of the epoch with the best validation accuracy.
 
     Only train and validation are used. The model is left with its best weights.
@@ -176,7 +171,7 @@ def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0
             best_val_acc, best_epoch = val_acc, epoch
             best_weights = copy.deepcopy(model.state_dict())
 
-        if epoch == 1 or epoch % 5 == 0:
+        if verbose and (epoch == 1 or epoch % 5 == 0):
             print(f"epoch {epoch:3d} | train loss {train_loss:.3f} acc {train_acc:.3f} | "
                   f"val loss {val_loss:.3f} acc {val_acc:.3f}")
 
@@ -188,29 +183,102 @@ def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0
 # --------------------------------------------------------------------------------------------------
 # 4. Results
 # --------------------------------------------------------------------------------------------------
-# A pickle holds the settings, the learning curves and the validation scores (small, committed to Git).
-# The weights go next to it in a .pt file (bigger, ignored by Git). Never test scores: the test set is used once.
+# Each run is saved in two places:
+#   - results/<name>_<date>_<time>.pkl: the settings, the learning curves and the validation scores (small, committed
+#     to Git), with the weights next to it in a .pt file (bigger, ignored by Git). Never test scores. The date and
+#     time in the name mean that a run never overwrites an earlier one.
+#   - results/experiments.csv: one row per run (date, settings, scores), to see at a glance which model did well.
+#     The test columns (test_acc, test_loss, test_date) stay empty until add_test_score() fills them for a run:
+#     the test set is used once per model (adr/0003), so most rows have no test score.
 # Only load pickles that we made ourselves: loading a pickle from someone else can run code.
 def save_result(name, result, weights=None):
-    """Write results/<name>.pkl (and results/<name>.pt if weights are given)."""
+    """Save one run (pickle, weights and one row in experiments.csv). Returns the file name without extension."""
     RESULTS_DIR.mkdir(exist_ok=True)
-    with open(RESULTS_DIR / f"{name}.pkl", "wb") as f:
+    now = datetime.now()
+    stem = f"{name}_{now:%Y-%m-%d_%H-%M-%S}"
+    if (RESULTS_DIR / f"{stem}.pkl").exists():  # only if two runs of the same name end within the same second
+        raise FileExistsError(f"results/{stem}.pkl already exists: wait a second and save again")
+    with open(RESULTS_DIR / f"{stem}.pkl", "wb") as f:
         pickle.dump(result, f)
     if weights is not None:
-        torch.save(weights, RESULTS_DIR / f"{name}.pt")
+        torch.save(weights, RESULTS_DIR / f"{stem}.pt")
+
+    # One row for the table of all runs: the settings (CONFIG) in the middle, the scores at the end.
+    seeds = result.get("val_acc_by_seed")
+    row = {
+        "date": f"{now:%Y-%m-%d %H:%M:%S}",
+        "name": name,
+        **result["config"],
+        "n_params": result.get("n_params"),
+        "best_epoch": result["best_epoch"],
+        "best_val_acc": round(result["best_val_acc"], 4),
+        "val_acc_mean": round(float(np.mean(seeds)), 4) if seeds else None,  # over several seeds, if we ran them
+        "val_acc_std": round(float(np.std(seeds, ddof=1)), 4) if seeds else None,
+        "seconds": round(result["seconds"]),
+        "file": stem,
+    }
+    table = pd.DataFrame([row])
+    if (RESULTS_DIR / "experiments.csv").exists():
+        table = pd.concat([_read_table(), table], ignore_index=True)  # models with other settings add columns
+    _write_table(table)
+
+    print(f"saved results/{stem}.pkl and added a row to results/experiments.csv")
+    return stem
 
 
-def load_result(name):
-    """Read results/<name>.pkl."""
-    with open(RESULTS_DIR / f"{name}.pkl", "rb") as f:
+def load_result(stem):
+    """Read results/<stem>.pkl. The stem is the 'file' column of experiments.csv."""
+    with open(RESULTS_DIR / f"{stem}.pkl", "rb") as f:
         return pickle.load(f)
 
 
-def summary():
-    """One row per saved experiment: its settings and its best validation score."""
-    rows = []
-    for path in sorted(RESULTS_DIR.glob("*.pkl")):
-        result = load_result(path.stem)
-        rows.append({"name": path.stem, **result["config"], "best_epoch": result["best_epoch"],
-                     "best_val_acc": result["best_val_acc"], "seconds": round(result["seconds"])})
-    return pd.DataFrame(rows)
+def add_test_score(stem, model, data):
+    """Score a saved run on the test set (museum B) and write test_acc, test_loss and test_date in its row.
+
+    Use it when the model is final: the test set is used once per model (adr/0003), so this refuses to score a run
+    that already has a test score. It loads the weights saved with the run, so the model tested is exactly the one
+    in the table. `model` must have the same architecture; `data` must contain the test split:
+        data = load_data(size, splits=("train", "val", "test"))
+    Returns (loss, accuracy).
+    """
+    if "X_test" not in data:
+        raise ValueError('the test split is not loaded: use load_data(size, splits=("train", "val", "test"))')
+    table = _read_table()
+    rows = table.index[table["file"] == stem]
+    if len(rows) != 1:
+        raise ValueError(f"no run called {stem!r} in experiments.csv")
+    row = rows[0]
+    if pd.notna(table.loc[row, "test_acc"]):
+        raise RuntimeError(f"{stem} already has a test score: the test set is used once per model (adr/0003)")
+
+    model.load_state_dict(torch.load(RESULTS_DIR / f"{stem}.pt"))
+    loss, acc = evaluate(model, data["X_test"], data["y_test"])
+    table.loc[row, "test_acc"] = round(acc, 4)
+    table.loc[row, "test_loss"] = round(loss, 4)
+    table.loc[row, "test_date"] = f"{datetime.now():%Y-%m-%d %H:%M:%S}"
+    _write_table(table)
+    print(f"{stem}: test accuracy {acc:.1%}, test loss {loss:.3f} (written in results/experiments.csv)")
+    return loss, acc
+
+
+def summary(sort_by="best_val_acc"):
+    """The table of all runs (results/experiments.csv), best first."""
+    return _read_table().sort_values(sort_by, ascending=False)
+
+
+# Helpers for experiments.csv: date and name first, then the settings, then the scores (empty when not measured).
+FIRST_COLUMNS = ["date", "name"]
+SCORE_COLUMNS = ["n_params", "best_epoch", "best_val_acc", "val_acc_mean", "val_acc_std",
+                 "test_acc", "test_loss", "test_date", "seconds", "file"]
+
+
+def _read_table():
+    return pd.read_csv(RESULTS_DIR / "experiments.csv", dtype={"test_date": str})
+
+
+def _write_table(table):
+    for column in SCORE_COLUMNS:
+        if column not in table.columns:
+            table[column] = None  # an empty column, filled later if we ever measure it
+    settings = [c for c in table.columns if c not in FIRST_COLUMNS + SCORE_COLUMNS]
+    table[FIRST_COLUMNS + settings + SCORE_COLUMNS].to_csv(RESULTS_DIR / "experiments.csv", index=False)
