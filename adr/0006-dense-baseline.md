@@ -1,6 +1,6 @@
 # 0006. Keep the dense baseline simple and unchanged: 32 px, one hidden layer of 128
 
-- **Status:** Proposed (the settings were a first choice, to be confirmed by the team)
+- **Status:** Accepted (confirmed by both of us; the baseline stays as it is, and improving it is discussed separately)
 - **Date:** 2026-10-21
 
 **Context.** Every other model (regularised dense networks, the pretrained ResNet, the classical model) needs a
