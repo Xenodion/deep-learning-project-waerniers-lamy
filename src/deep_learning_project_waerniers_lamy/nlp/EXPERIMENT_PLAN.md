@@ -68,11 +68,22 @@ A fixed deck of 30–50 representative visitor queries covering:
 3. **Metadata queries:** Checks that genre/artist/style queries still work ("baroque portrait", "cubist still life").
 4. **Out-of-domain / Negative queries:** Queries for non-existent objects to verify ranking scores remain low ("modern sports car").
 
-### 4.2 Metrics
-- **Recall@5** and **Recall@10**: Proportion of queries where at least one clearly relevant painting appears in the top $k$.
-- **Mean Reciprocal Rank (MRR)**: Average reciprocal rank of the first relevant result.
-- **Latency (ms/query)** on CPU.
-- **Memory footprint (MB)**.
+### 4.2 Metrics & Definitions
+
+- **Queries**: The set of test questions evaluated (e.g. 22 benchmark queries across visual concepts, compound queries, and metadata).
+- **Recall@k (Recall@5 & Recall@10)**:
+  Measures the proportion of queries for which **at least one relevant painting is successfully retrieved within the top-$k$ recommendations** shown to the visitor on the kiosk screen.
+  - Formally:
+    $$\text{Recall}@k = \frac{1}{|Q|} \sum_{q \in Q} \mathbb{I}(\text{Top-}k(q) \cap \text{Relevant}(q) \neq \emptyset)$$
+  - *Intuition:* Recall@5 measures if the visitor finds what they want immediately in the first 5 paintings without scrolling. Recall@10 checks within 10 paintings.
+- **Mean Reciprocal Rank (MRR)**:
+  Measures the **quality of the ranking order**. It evaluates how close to the top position the first relevant painting appears:
+  $$\text{MRR} = \frac{1}{|Q|} \sum_{q \in Q} \frac{1}{\text{rank}_1(q)}$$
+  - If the first relevant painting is ranked 1st $\to$ score = 1.0 (perfect).
+  - If 2nd $\to$ score = 0.5; if 5th $\to$ score = 0.2; if not found $\to$ score = 0.0.
+  - A higher MRR proves that relevant paintings are pushed to the top of the screen.
+- **Latency (ms/query)**: Average retrieval response time on CPU (target < 200 ms).
+- **Memory footprint (MB)**: In-memory RAM consumption on the kiosk device (target < 500 MB).
 
 ---
 
