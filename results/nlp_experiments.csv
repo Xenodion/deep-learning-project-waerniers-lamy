@@ -1,0 +1,6 @@
+date,name,method,corpus,recall_at_5,recall_at_10,mrr,latency_ms,num_queries,encoder,text_source,dim,captioned_share,alpha_image,alpha_text,clip_model,text_model
+2026-10-22 12:48:10,E0_metadata_baseline,Metadata + all-MiniLM-L6-v2,val_A,0.1818,0.1818,0.1591,29.49,22,all-MiniLM-L6-v2,artist_genre_style,384.0,,,,,
+2026-10-22 13:14:59,E2_vlm_descriptions,VLM (BLIP) + all-MiniLM-L6-v2,val_A,0.1818,0.2273,0.1667,12.69,22,all-MiniLM-L6-v2,vlm_description_and_metadata,384.0,0.1,,,,
+2026-10-22 13:38:08,E2_vlm_descriptions,VLM (BLIP) + all-MiniLM-L6-v2,val_A,0.1818,0.3182,0.1346,12.17,22,all-MiniLM-L6-v2,vlm_description_and_metadata,384.0,1.0,,,,
+2026-10-22 13:42:16,E4_clip_direct_image,CLIP Direct Image (openai/clip-vit-base-patch32),val_A,0.2727,0.4091,0.1752,128.09,22,openai/clip-vit-base-patch32,raw_query_to_image_embedding,512.0,,,,,
+2026-10-22 13:44:16,E5_hybrid_retrieval,Hybrid CLIP (openai/clip-vit-base-patch32) + VLM (all-MiniLM-L6-v2),val_A,0.2273,0.4091,0.1639,39.57,22,,,,,0.5,0.5,openai/clip-vit-base-patch32,all-MiniLM-L6-v2
