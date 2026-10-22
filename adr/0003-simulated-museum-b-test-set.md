@@ -38,7 +38,7 @@ The rules, in plain words:
 - Inside A, train and validation can share artists (all 47 named validation artists are also in train).
 - "Unknown Artist" stays in A because we cannot tell which painters are the same person: in B it could leak.
 - Every set has 20% of each genre.
-- B is used only at the end, to score each finished model once (dense network, ResNet, classical baseline). Early
+- B is used only at the end, to score each finished model once (dense network, CNN, ResNet). Early
   stopping, tuning, diagnosis and model choice use validation(A), never B. If B reveals a problem, we report it as a
   finding; fixing the model and re-testing on B would make B a tuning set, and we would say so.
 - The split is saved as a file (image id to train, validation or test) made by a committed script. The figures above

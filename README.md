@@ -50,8 +50,8 @@ Files marked *(planned)* are not written yet. Decisions and their evidence are i
     │   ├── P03_first_cnn.ipynb           # our first CNN, described by a config and run with run_experiment
     │   ├── P04_cnn_longer_batchnorm.ipynb  # the first CNN trained longer and with batch norm (ADR 0007)
     │   ├── P05_cnn_deeper.ipynb          # the CNN with a fourth convolution block (ADR 0008)
-    │   ├── P06_resnet_transfer.ipynb     # (planned) pretrained ResNet, transfer learning
-    │   ├── P07_classical_and_comparison.ipynb  # (planned) classical baseline, all results side by side
+    │   ├── P06_resnet_transfer.ipynb     # pretrained ResNet-18, transfer learning (ADR 0009)
+    │   ├── P07_comparison.ipynb          # (planned) all models side by side, with their cost per image on a CPU
     │   └── run_final.py                  # (planned) loads the chosen model and scores it once on museum B
     └── nlp/                              # natural-language part, deferred (ADR 0004)
 ```

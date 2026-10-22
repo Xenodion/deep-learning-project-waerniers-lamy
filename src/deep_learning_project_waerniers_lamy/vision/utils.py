@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+import torchvision
 from PIL import Image
 from torch import nn
 
@@ -318,7 +319,7 @@ def to_images(data, size):
     return converted
 
 
-def run_experiment(name, config, seeds=3, build_model=build_cnn):
+def run_experiment(name, config, seeds=3, build_model=build_cnn, load_fn=None):
     """Build the model described by config, train it, measure it on validation and record the run.
 
     Steps: load the data, build the model, train (best epoch kept on validation), repeat with other seeds,
@@ -326,8 +327,11 @@ def run_experiment(name, config, seeds=3, build_model=build_cnn):
     Needs in config: image_size, epochs, lr, batch_size, weight_decay, seed (and what build_model needs).
     Returns a dict: model (with its best weights), result (history, best epoch...), confusion, val_acc_by_seed, stem.
     """
-    size = config["image_size"]
-    data = to_images(load_data(size=size), size)
+    if load_fn is None:  # the default: small images for our own CNNs
+        size = config["image_size"]
+        data = to_images(load_data(size=size), size)
+    else:  # another way to prepare the data, for example load_resnet_data
+        data = load_fn(config)
     classes = data["classes"]
 
     def train(seed, verbose):
@@ -367,3 +371,97 @@ def run_experiment(name, config, seeds=3, build_model=build_cnn):
         record["val_acc_by_seed"] = val_acc_by_seed
     stem = save_result(name, record, weights=result["best_weights"])
     return {"model": model, "result": result, "confusion": confusion, "val_acc_by_seed": val_acc_by_seed, "stem": stem}
+
+
+# --------------------------------------------------------------------------------------------------
+# 6. Pretrained ResNet-18 (transfer learning)
+# --------------------------------------------------------------------------------------------------
+# The network was trained on ImageNet. Most of it stays frozen, so we pass the images through the frozen part once and keep
+# the result: training then only touches the small trainable part (a new final layer, and optionally the last block).
+IMAGENET_MEAN = [0.485, 0.456, 0.406]  # what the pretrained network expects, not our own statistics
+IMAGENET_STD = [0.229, 0.224, 0.225]
+
+
+def pretrained_resnet():
+    """ResNet-18 with the ImageNet weights (downloaded the first time, about 45 MB), in evaluation mode."""
+    weights = torchvision.models.ResNet18_Weights.IMAGENET1K_V1
+    return torchvision.models.resnet18(weights=weights).eval()
+
+
+def load_resnet_data(config, splits=("train", "val"), batch_size=64):
+    """Return a dict like load_data, with X_<split> = the images passed once through the frozen part of the ResNet.
+
+    config["finetune"] decides where the frozen part stops:
+      "head":   the whole network up to the average pooling: 512 numbers per image, only a new final layer is trained;
+      "layer4": up to the end of layer3: 256 x 14 x 14 numbers per image, so the last block (layer4) can be trained too.
+    The images are the 224 x 224 files of the subset, standardised with the ImageNet mean and std. The test split is only
+    loaded if you ask for it, as in load_data (adr/0003).
+    """
+    table = pd.read_csv(DATA_DIR / "split.csv")
+    resnet = pretrained_resnet()
+    frozen = [resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool, resnet.layer1, resnet.layer2, resnet.layer3]
+    if config.get("finetune", "head") == "head":
+        frozen += [resnet.layer4, resnet.avgpool, nn.Flatten()]
+    frozen = nn.Sequential(*frozen).eval()
+    mean = torch.tensor(IMAGENET_MEAN).view(1, 3, 1, 1)
+    std = torch.tensor(IMAGENET_STD).view(1, 3, 1, 1)
+
+    data = {"classes": sorted(table["label"].unique())}
+    for name in splits:
+        rows = table[table["split"] == name]
+        features = []
+        for start in range(0, len(rows), batch_size):
+            images = []
+            for path in rows["path"].iloc[start:start + batch_size]:
+                with Image.open(DATA_DIR / path) as im:
+                    images.append(np.asarray(im.convert("RGB").resize((224, 224))))
+            batch = torch.tensor(np.stack(images)).permute(0, 3, 1, 2).float() / 255
+            with torch.no_grad():  # the frozen part is never trained
+                features.append(frozen((batch - mean) / std))
+        data["X_" + name] = torch.cat(features)
+        data["y_" + name] = torch.tensor(rows["label_idx"].to_numpy())
+    return data
+
+
+def build_resnet_head(config, n_classes=5):
+    """The trainable part: a new final layer, preceded by the pretrained last block if finetune is "layer4".
+
+    Optional in config: finetune ("head" or "layer4"), dropout (0.0). Its "weights" are only the trainable ones.
+    """
+    head = [nn.Dropout(config.get("dropout", 0.0)), nn.Linear(512, n_classes)]
+    if config.get("finetune", "head") == "layer4":
+        layer4 = copy.deepcopy(pretrained_resnet().layer4)
+        return nn.Sequential(layer4, nn.AdaptiveAvgPool2d(1), nn.Flatten(), *head)
+    return nn.Sequential(*head)
+
+
+# --------------------------------------------------------------------------------------------------
+# 7. Scoring any saved run on the test set
+# --------------------------------------------------------------------------------------------------
+def build_dense(config, n_classes=5):
+    """The dense baseline of P02: one hidden layer, described by image_size and hidden."""
+    n_inputs = 3 * config["image_size"] ** 2
+    return nn.Sequential(nn.Linear(n_inputs, config["hidden"]), nn.ReLU(), nn.Linear(config["hidden"], n_classes))
+
+
+def score_on_test(stem):
+    """Score a saved run on the test set (museum B) and write the result in experiments.csv.
+
+    It rebuilds the model and the data preparation from the run's own config (dense, cnn or resnet18), so it works for
+    every model of the project. Like add_test_score, it refuses a run that already has a test score (adr/0003).
+    Returns (loss, accuracy).
+    """
+    config = load_result(stem)["config"]
+    size = config["image_size"]
+    if config["model"] == "dense":
+        model = build_dense(config)
+        data = load_data(size=size, splits=("test",))
+    elif config["model"] == "cnn":
+        model = build_cnn(config)
+        data = to_images(load_data(size=size, splits=("test",)), size)
+    elif config["model"] == "resnet18":
+        model = build_resnet_head(config)
+        data = load_resnet_data(config, splits=("test",))
+    else:
+        raise ValueError(f"do not know how to rebuild a model of type {config['model']!r}")
+    return add_test_score(stem, model, data)

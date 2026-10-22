@@ -12,10 +12,11 @@ Short notes on **why** we made each significant choice, so we can defend it at t
 | [0006](0006-dense-baseline.md) | Keep the dense baseline simple and unchanged: 32 px, one hidden layer of 128 | Accepted |
 | [0007](0007-first-cnn.md) | Keep the first CNN as the reference for convolutional models: 3 blocks, 64 px | Proposed |
 | [0008](0008-longer-training-and-deeper-cnn.md) | Train the CNN for 100 epochs without batch norm, and try a deeper CNN next (P05) | Proposed |
+| [0009](0009-move-to-pretrained-resnet.md) | Stop tuning the small CNN and move to a pretrained ResNet-18 (P06) | Accepted |
+| [0010](0010-resnet-results-and-final-model.md) | The pretrained ResNet-18 is our best model; we propose the frozen version as the final one | Proposed |
 
 ## Still to decide
 
-- Image size for the dense network (32 px is a first choice, not compared with 64 px)
-- Regularisation and monitoring protocol (tag m2)
-- Pretrained ResNet: variant, frozen or fine-tuned
-- Classical baseline and the production recommendation (neural network or not)
+- Which ResNet stage is the final model, frozen or fine-tuned (ADR 0010)
+- Cost per image on a CPU for the dense network, a CNN and the ResNet, and the production recommendation (P07)
+- The final script for the teacher (`run_final.py`)

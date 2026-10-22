@@ -17,3 +17,5 @@ scored at the end on museum B ([0003](0003-simulated-museum-b-test-set.md)). We 
 **Consequences.** We still need a classical baseline to answer the director's "is a neural network worth it?", trained
 and scored on the same museum A / museum B split as the networks. If the
 language part comes back, note that the dataset has no captions, only genre, style and artist.
+
+**Update (2026-10-22).** The classical baseline is no longer planned: this is a deep-learning course, so the director's question is answered with our neural networks.
