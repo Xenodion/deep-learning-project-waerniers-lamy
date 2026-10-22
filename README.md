@@ -44,12 +44,14 @@ Files marked *(planned)* are not written yet. Decisions and their evidence are i
 └── src/deep_learning_project_waerniers_lamy/
     ├── vision/                           # computer vision: the genre classifier
     │   ├── make_wikiart_subset.py        # downloads the 5-genre subset (course script, unchanged)
-    │   ├── utils.py                      # functions shared by all notebooks (make_split, load_data, fit, save_result)
+    │   ├── utils.py                      # functions shared by all notebooks (make_split, load_data, fit, run_experiment, ...)
     │   ├── P01_explore_data.ipynb        # what the downloaded data is (figures quoted in the ADRs)
     │   ├── P02_dense_baseline.ipynb      # the dense network that every other model is compared with
-    │   ├── P03_regularisation.ipynb      # (planned) fighting the overfitting, failure diagnosis
-    │   ├── P04_resnet_transfer.ipynb     # (planned) pretrained ResNet, transfer learning
-    │   ├── P05_classical_and_comparison.ipynb  # (planned) classical baseline, all results side by side
+    │   ├── P03_first_cnn.ipynb           # our first CNN, described by a config and run with run_experiment
+    │   ├── P04_cnn_longer_batchnorm.ipynb  # the first CNN trained longer and with batch norm (ADR 0007)
+    │   ├── P05_cnn_deeper.ipynb          # the CNN with a fourth convolution block (ADR 0008)
+    │   ├── P06_resnet_transfer.ipynb     # (planned) pretrained ResNet, transfer learning
+    │   ├── P07_classical_and_comparison.ipynb  # (planned) classical baseline, all results side by side
     │   └── run_final.py                  # (planned) loads the chosen model and scores it once on museum B
     └── nlp/                              # natural-language part, deferred (ADR 0004)
 ```

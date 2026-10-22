@@ -1,3 +1,13 @@
-date,name,model,image_size,hidden,epochs,lr,batch_size,weight_decay,seed,n_params,best_epoch,best_val_acc,val_acc_mean,val_acc_std,test_acc,test_loss,test_date,seconds,file
-2026-10-21 17:29:52,dense_baseline,dense,32,128,30,0.001,64,0.0,0,393989,8,0.3854,0.39,0.009,,,,4,dense_baseline_2026-10-21_17-29-52
-2026-10-21 17:50:22,dense_baseline,dense,32,128,30,0.001,64,0.0,0,393989,8,0.3854,0.39,0.009,,,,4,dense_baseline_2026-10-21_17-50-22
+date,name,model,image_size,hidden,epochs,lr,batch_size,weight_decay,seed,conv_channels,kernel_size,batch_norm,dropout,n_params,best_epoch,best_val_acc,val_acc_mean,val_acc_std,test_acc,test_loss,test_date,seconds,file
+2026-10-21 17:29:52,dense_baseline,dense,32,128.0,30,0.001,64,0.0,0,,,,,393989,8,0.3854,0.39,0.009,,,,4,dense_baseline_2026-10-21_17-29-52
+2026-10-21 17:50:22,dense_baseline,dense,32,128.0,30,0.001,64,0.0,0,,,,,393989,8,0.3854,0.39,0.009,,,,4,dense_baseline_2026-10-21_17-50-22
+2026-10-21 19:54:39,cnn_first,cnn,64,,30,0.001,64,0.0,0,"[16, 32, 64]",3.0,False,0.0,23909,30,0.5375,0.5358,0.0079,,,,129,cnn_first_2026-10-21_19-54-39
+2026-10-22 13:07:48,cnn_longer,cnn,64,,100,0.001,64,0.0,0,"[16, 32, 64]",3.0,False,0.0,23909,95,0.6083,,,,,,574,cnn_longer_2026-10-22_13-07-48
+2026-10-22 13:12:07,cnn_batchnorm,cnn,64,,30,0.001,64,0.0,0,"[16, 32, 64]",3.0,True,0.0,24133,21,0.5938,,,,,,250,cnn_batchnorm_2026-10-22_13-12-07
+2026-10-22 13:12:23,cnn_longer,cnn,64,,100,0.001,64,0.0,0,"[16, 32, 64]",3.0,False,0.0,23909,95,0.6083,,,,,,683,cnn_longer_2026-10-22_13-12-23
+2026-10-22 13:16:39,cnn_batchnorm,cnn,64,,30,0.001,64,0.0,0,"[16, 32, 64]",3.0,True,0.0,24133,21,0.5938,,,,,,248,cnn_batchnorm_2026-10-22_13-16-39
+2026-10-22 13:25:56,cnn_longer_batchnorm,cnn,64,,100,0.001,64,0.0,0,"[16, 32, 64]",3.0,True,0.0,24133,54,0.5979,,,,,,822,cnn_longer_batchnorm_2026-10-22_13-25-56
+2026-10-22 13:29:07,cnn_longer_batchnorm,cnn,64,,100,0.001,64,0.0,0,"[16, 32, 64]",3.0,True,0.0,24133,54,0.5979,,,,,,740,cnn_longer_batchnorm_2026-10-22_13-29-07
+2026-10-22 14:39:16,cnn_deeper,cnn,64,,100,0.001,64,0.0,0,"[16, 32, 64, 128]",3.0,False,0.0,98085,50,0.5896,,,,,,623,cnn_deeper_2026-10-22_14-39-16
+2026-10-22 14:44:51,cnn_deeper,cnn,64,,100,0.001,64,0.0,0,"[16, 32, 64, 128]",3.0,False,0.0,98085,50,0.5896,,,,,,667,cnn_deeper_2026-10-22_14-44-51
+2026-10-22 15:32:19,cnn_deeper_5seeds,cnn,64,,100,0.001,64,0.0,0,"[16, 32, 64, 128]",3.0,False,0.0,98085,50,0.5896,0.5837,0.0112,,,,535,cnn_deeper_5seeds_2026-10-22_15-32-19

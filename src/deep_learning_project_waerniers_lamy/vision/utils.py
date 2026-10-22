@@ -282,3 +282,88 @@ def _write_table(table):
             table[column] = None  # an empty column, filled later if we ever measure it
     settings = [c for c in table.columns if c not in FIRST_COLUMNS + SCORE_COLUMNS]
     table[FIRST_COLUMNS + settings + SCORE_COLUMNS].to_csv(RESULTS_DIR / "experiments.csv", index=False)
+
+
+# --------------------------------------------------------------------------------------------------
+# 5. Experiments: a model described by a config, trained and recorded in one call
+# --------------------------------------------------------------------------------------------------
+def build_cnn(config, n_classes=5):
+    """A small CNN described by the config.
+
+    Needs: conv_channels, one entry per convolution block (for example [16, 32, 64]).
+    Optional: kernel_size (3), batch_norm (False), dropout (0.0).
+    Each block is a convolution, (batch norm), ReLU, then a max pooling that halves the image. After the last block,
+    each feature map is averaged into one number, so the final layer only has conv_channels[-1] inputs.
+    """
+    kernel = config.get("kernel_size", 3)
+    layers = []
+    in_channels = 3
+    for out_channels in config["conv_channels"]:
+        layers.append(nn.Conv2d(in_channels, out_channels, kernel, padding=kernel // 2))
+        if config.get("batch_norm", False):
+            layers.append(nn.BatchNorm2d(out_channels))
+        layers += [nn.ReLU(), nn.MaxPool2d(2)]
+        in_channels = out_channels
+    layers += [nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Dropout(config.get("dropout", 0.0)),
+               nn.Linear(in_channels, n_classes)]
+    return nn.Sequential(*layers)
+
+
+def to_images(data, size):
+    """load_data gives flat rows (height, width, channels); a CNN wants (channels, height, width). Returns a copy."""
+    converted = dict(data)
+    for key in data:
+        if key.startswith("X_"):
+            converted[key] = data[key].view(len(data[key]), size, size, 3).permute(0, 3, 1, 2).contiguous()
+    return converted
+
+
+def run_experiment(name, config, seeds=3, build_model=build_cnn):
+    """Build the model described by config, train it, measure it on validation and record the run.
+
+    Steps: load the data, build the model, train (best epoch kept on validation), repeat with other seeds,
+    confusion matrix on validation, save_result. The test set is not used.
+    Needs in config: image_size, epochs, lr, batch_size, weight_decay, seed (and what build_model needs).
+    Returns a dict: model (with its best weights), result (history, best epoch...), confusion, val_acc_by_seed, stem.
+    """
+    size = config["image_size"]
+    data = to_images(load_data(size=size), size)
+    classes = data["classes"]
+
+    def train(seed, verbose):
+        torch.manual_seed(seed)  # the same seed gives the same starting weights
+        model = build_model(config, len(classes))
+        if verbose:
+            loss0, acc0 = evaluate(model, data["X_train"], data["y_train"])
+            print(f"{sum(p.numel() for p in model.parameters())} parameters | before training: loss {loss0:.3f} "
+                  f"(ln {len(classes)} = {np.log(len(classes)):.3f}), accuracy {acc0:.1%}")
+        result = fit(model, data, epochs=config["epochs"], lr=config["lr"], batch_size=config["batch_size"],
+                     weight_decay=config["weight_decay"], seed=seed, verbose=verbose)
+        return model, result
+
+    model, result = train(config["seed"], verbose=True)
+    print(f"\nbest validation accuracy {result['best_val_acc']:.1%} at epoch {result['best_epoch']} "
+          f"({result['seconds']:.0f} s)")
+
+    val_acc_by_seed = [result["best_val_acc"]]
+    for k, seed in enumerate(range(config["seed"] + 1, config["seed"] + seeds), start=1):  # the other seeds
+        # announce it first: each seed takes as long as the first run and prints nothing while it trains
+        print(f"seed {seed} ({k} of {seeds - 1} more): training, about {result['seconds']:.0f} s...", flush=True)
+        _, other = train(seed, verbose=False)
+        val_acc_by_seed.append(other["best_val_acc"])
+        print(f"   best validation accuracy {other['best_val_acc']:.1%} at epoch {other['best_epoch']}")
+
+    model.eval()
+    with torch.no_grad():
+        predicted = model(data["X_val"]).argmax(dim=1)
+    confusion = pd.crosstab(pd.Series([classes[i] for i in data["y_val"]], name="true genre"),
+                            pd.Series([classes[i] for i in predicted], name="predicted"))
+    confusion = confusion.reindex(index=classes, columns=classes, fill_value=0)
+
+    record = {"config": config, "n_params": sum(p.numel() for p in model.parameters()), "history": result["history"],
+              "best_epoch": result["best_epoch"], "best_val_acc": result["best_val_acc"],
+              "seconds": result["seconds"], "classes": classes, "val_confusion": confusion}
+    if len(val_acc_by_seed) > 1:
+        record["val_acc_by_seed"] = val_acc_by_seed
+    stem = save_result(name, record, weights=result["best_weights"])
+    return {"model": model, "result": result, "confusion": confusion, "val_acc_by_seed": val_acc_by_seed, "stem": stem}
