@@ -370,7 +370,8 @@ def run_experiment(name, config, seeds=3, build_model=build_cnn, load_fn=None):
     if len(val_acc_by_seed) > 1:
         record["val_acc_by_seed"] = val_acc_by_seed
     stem = save_result(name, record, weights=result["best_weights"])
-    return {"model": model, "result": result, "confusion": confusion, "val_acc_by_seed": val_acc_by_seed, "stem": stem}
+    return {"model": model, "result": result, "confusion": confusion, "val_acc_by_seed": val_acc_by_seed, "stem": stem,
+            "data": data}
 
 
 # --------------------------------------------------------------------------------------------------
@@ -382,10 +383,15 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]  # what the pretrained network expects, no
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
-def pretrained_resnet():
-    """ResNet-18 with the ImageNet weights (downloaded the first time, about 45 MB), in evaluation mode."""
-    weights = torchvision.models.ResNet18_Weights.IMAGENET1K_V1
-    return torchvision.models.resnet18(weights=weights).eval()
+# Size of the vector that the frozen part gives for one image: the last block alone, or the three last blocks together ("multi").
+FEATURE_SIZE = {("resnet18", "last"): 512, ("resnet18", "multi"): 128 + 256 + 512,
+                ("resnet50", "last"): 2048, ("resnet50", "multi"): 512 + 1024 + 2048}
+
+
+def pretrained_resnet(arch="resnet18"):
+    """A ResNet with the ImageNet weights (downloaded the first time), in evaluation mode: "resnet18" or "resnet50"."""
+    weights = {"resnet18": torchvision.models.ResNet18_Weights, "resnet50": torchvision.models.ResNet50_Weights}[arch]
+    return getattr(torchvision.models, arch)(weights=weights.IMAGENET1K_V1).eval()
 
 
 def load_resnet_data(config, splits=("train", "val"), batch_size=64):
@@ -394,45 +400,95 @@ def load_resnet_data(config, splits=("train", "val"), batch_size=64):
     config["finetune"] decides where the frozen part stops:
       "head":   the whole network up to the average pooling: 512 numbers per image, only a new final layer is trained;
       "layer4": up to the end of layer3: 256 x 14 x 14 numbers per image, so the last block (layer4) can be trained too.
-    The images are the 224 x 224 files of the subset, standardised with the ImageNet mean and std. The test split is only
-    loaded if you ask for it, as in load_data (adr/0003).
+    The images are the files of the subset (224 x 224, or config["image_size"] if smaller), standardised with the ImageNet mean
+    and std; the sizes quoted above are for 224 px. The test split is only loaded if you ask for it, as in load_data (adr/0003).
+
+    Optional keys of config (the defaults give the P06 behaviour):
+      model:     "resnet18" or "resnet50", the pretrained network;
+      features:  "last" (the last block) or "multi" (average-pooled outputs of the three last blocks, joined);
+      augment:   number of augmented copies (random crop, mirror, colour) added for each TRAIN image, drawn with config["seed"];
+      flip_eval: also give X_<split>_flip, the features of the mirrored validation / test images, for flip averaging.
     """
     table = pd.read_csv(DATA_DIR / "split.csv")
-    resnet = pretrained_resnet()
-    frozen = [resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool, resnet.layer1, resnet.layer2, resnet.layer3]
-    if config.get("finetune", "head") == "head":
-        frozen += [resnet.layer4, resnet.avgpool, nn.Flatten()]
-    frozen = nn.Sequential(*frozen).eval()
+    size = config.get("image_size", 224)  # the files are 224 x 224; a smaller size shrinks them exactly as load_data does
+    resnet = pretrained_resnet(config.get("model", "resnet18"))
+    stem = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool, resnet.layer1)
+    if config.get("finetune", "head") == "layer4":
+        extract = nn.Sequential(stem, resnet.layer2, resnet.layer3).eval()  # layer4 is trained afterwards
+    elif config.get("features", "last") == "multi":
+        def extract(x):
+            x2 = resnet.layer2(stem(x))
+            x3 = resnet.layer3(x2)
+            x4 = resnet.layer4(x3)
+            return torch.cat([x2.mean(dim=(2, 3)), x3.mean(dim=(2, 3)), x4.mean(dim=(2, 3))], dim=1)
+    else:
+        extract = nn.Sequential(stem, resnet.layer2, resnet.layer3, resnet.layer4, resnet.avgpool, nn.Flatten()).eval()
     mean = torch.tensor(IMAGENET_MEAN).view(1, 3, 1, 1)
     std = torch.tensor(IMAGENET_STD).view(1, 3, 1, 1)
+    augmentation = torchvision.transforms.Compose([
+        torchvision.transforms.RandomResizedCrop(size, scale=(0.6, 1.0)),
+        torchvision.transforms.RandomHorizontalFlip(),
+        torchvision.transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+    ])
+
+    def features_of(paths, transform=None, flip=False):
+        """The frozen part applied to the images in `paths`, batch by batch (optionally augmented, or mirrored)."""
+        out = []
+        for start in range(0, len(paths), batch_size):
+            images = []
+            for path in paths[start:start + batch_size]:
+                with Image.open(DATA_DIR / path) as im:
+                    im = im.convert("RGB").resize((size, size), Image.Resampling.BILINEAR)
+                    if transform is not None:
+                        im = transform(im)
+                    images.append(np.asarray(im))
+            batch = torch.tensor(np.stack(images)).permute(0, 3, 1, 2).float() / 255
+            if flip:
+                batch = batch.flip(3)  # mirror image: flip the width
+            with torch.no_grad():  # the frozen part is never trained
+                out.append(extract((batch - mean) / std))
+        return torch.cat(out)
 
     data = {"classes": sorted(table["label"].unique())}
     for name in splits:
         rows = table[table["split"] == name]
-        features = []
-        for start in range(0, len(rows), batch_size):
-            images = []
-            for path in rows["path"].iloc[start:start + batch_size]:
-                with Image.open(DATA_DIR / path) as im:
-                    images.append(np.asarray(im.convert("RGB").resize((224, 224))))
-            batch = torch.tensor(np.stack(images)).permute(0, 3, 1, 2).float() / 255
-            with torch.no_grad():  # the frozen part is never trained
-                features.append(frozen((batch - mean) / std))
-        data["X_" + name] = torch.cat(features)
-        data["y_" + name] = torch.tensor(rows["label_idx"].to_numpy())
+        paths = list(rows["path"])
+        labels = torch.tensor(rows["label_idx"].to_numpy())
+        X, y = features_of(paths), labels
+        if name == "train" and config.get("augment", 0) > 0:
+            torch.manual_seed(config.get("seed", 0))  # the same augmented copies every time
+            for _ in range(config["augment"]):
+                X = torch.cat([X, features_of(paths, transform=augmentation)])
+                y = torch.cat([y, labels])
+        data["X_" + name], data["y_" + name] = X, y
+        if config.get("flip_eval") and name != "train":
+            data["X_" + name + "_flip"] = features_of(paths, flip=True)
     return data
 
 
 def build_resnet_head(config, n_classes=5):
     """The trainable part: a new final layer, preceded by the pretrained last block if finetune is "layer4".
 
-    Optional in config: finetune ("head" or "layer4"), dropout (0.0). Its "weights" are only the trainable ones.
+    Optional in config: finetune ("head" or "layer4"), dropout (0.0), and model / features as in load_resnet_data.
+    Its "weights" are only the trainable ones.
     """
-    head = [nn.Dropout(config.get("dropout", 0.0)), nn.Linear(512, n_classes)]
+    arch = config.get("model", "resnet18")
+    head = [nn.Dropout(config.get("dropout", 0.0)), nn.Linear(FEATURE_SIZE[(arch, config.get("features", "last"))], n_classes)]
     if config.get("finetune", "head") == "layer4":
-        layer4 = copy.deepcopy(pretrained_resnet().layer4)
+        layer4 = copy.deepcopy(pretrained_resnet(arch).layer4)
         return nn.Sequential(layer4, nn.AdaptiveAvgPool2d(1), nn.Flatten(), *head)
     return nn.Sequential(*head)
+
+
+def evaluate_with_flip(model, X, X_flip, y, batch_size=256):
+    """Accuracy when each prediction averages the probabilities of an image and of its mirror image."""
+    model.eval()
+    correct = 0
+    with torch.no_grad():
+        for i in range(0, len(X), batch_size):
+            probs = model(X[i:i + batch_size]).softmax(dim=1) + model(X_flip[i:i + batch_size]).softmax(dim=1)
+            correct += (probs.argmax(dim=1) == y[i:i + batch_size]).sum().item()
+    return correct / len(X)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -459,7 +515,7 @@ def score_on_test(stem):
     elif config["model"] == "cnn":
         model = build_cnn(config)
         data = to_images(load_data(size=size, splits=("test",)), size)
-    elif config["model"] == "resnet18":
+    elif config["model"] in ("resnet18", "resnet50"):
         model = build_resnet_head(config)
         data = load_resnet_data(config, splits=("test",))
     else:
