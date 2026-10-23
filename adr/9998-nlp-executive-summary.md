@@ -76,16 +76,42 @@ with Qwen2.5-VL-3B on Colab: the results were promising, but Colab's limits did 
 (and Kaggle refused internet access). We chose a paid API after estimating under 2 €, and the final bill, including
 the judge, is 3.38 $.
 
-## Trade-offs
+## Trade-offs and recommendation
 
-- **SigLIP vs hybrid.** The hybrid is not significantly better and needs a paid description per painting plus a second
-  model at query time (115 ms vs 82 ms). We would ship SigLIP and keep the hybrid in mind if object queries turn out to
-  matter most.
-- **LLM judge vs human grading.** Grading about 1,600 pairs by hand was too long for one person. The judge plus 150
-  human grades costs a few dollars and its agreement is measured, but the grades are an LLM's, trusted only as far as a
-  kappa of 0.65 with one human (who also built the systems).
-- **Untuned fusion weight.** Tuning it on 40 queries whose judgments come from a few weights would have favoured those
-  weights. Equal weight is an assumption, stated as such.
+Measured on this laptop's CPU (median per query, collection already indexed). Indexing time and model sizes measured in
+the same way; one painting's SigLIP embedding is 768 floats, so 3 KB.
+
+| Option | nDCG@5 dev | nDCG@5 Museum B | Paid API | Indexing a new painting | One query | Model at query time | Parts to maintain |
+|---|---|---|---|---|---|---|---|
+| R1 metadata | 0.14 | 0.17 | no | needs genre, style, artist | 34 ms | MiniLM, 23 M weights | metadata + 1 model |
+| R3 description + metadata | 0.71 | 0.68 | yes, about 0.06 $ per 1,000 paintings | 1 VLM call | about 13 ms | MiniLM, 23 M weights | VLM API + prompt + 1 model |
+| **R4 SigLIP image** | **0.81** | **0.79** | **no** | **174 ms on CPU** | **82 ms** | **SigLIP text tower, 110 M weights** | **1 model** |
+| R5 hybrid | 0.83 | 0.80 | yes, as R3 | both | 115 ms | both | everything above |
+
+- **What each step buys.** Metadata to description: +0.55 for a paid call per painting and an API to keep alive.
+  Description to SigLIP: +0.10 for *less* infrastructure (no API, no text). SigLIP to hybrid: +0.02 on dev and +0.01 on
+  Museum B (p = 0.54 and 0.78, so not distinguishable from zero), for the whole description pipeline and +33 ms.
+- **What the hybrid would still bring.** Object queries (+0.09 on dev, +0.05 on Museum B, about 12 queries, not
+  tested) and religious paintings, where the description finds the iconography (the Virgin, a crucifixion) better than
+  the image.
+- **Recommendation: SigLIP alone.** Offline, the image tower turns each painting into a vector once (about 3 minutes per
+  1,000 paintings on CPU) stored next to its id: 1.8 MB for this museum, 30 MB for 10,000 paintings, in a `.npy` or
+  Parquet file. Online, the text tower encodes the visitor's query (about 100 ms) and a dot product with all the vectors
+  gives the 5 best (16 ms even for 100,000 paintings): no vector database, no API, no recurring cost. The storage is tiny;
+  the model is not (110 M weights, about 440 MB in float32), but it runs on a plain CPU.
+- **When to choose the hybrid instead.** If the museum wants the descriptions anyway (to show or read out why a
+  painting was proposed, for accessibility), the hybrid comes almost free and helps on objects.
+
+## Perspectives (not built)
+
+- **The two branches are complementary**: their per-query scores are barely correlated (0.09 on dev, 0.37 on
+  Museum B). Choosing the better branch for each query would give 0.88 and 0.84: about +0.05 above the hybrid, a
+  ceiling that a smarter fusion can only approach.
+- **The best branch depends on the genre**: the description wins on religious paintings on both museums, the image on
+  portraits. A fusion learned on the scores and on the genre *predicted by our vision model* would link the two halves
+  of the project; with 40 queries, its gain (at most a few points) would not be measurable here.
+- **Re-ranking**: let a VLM look at SigLIP's top 20 with the query in hand, the way the judge does, at the price of
+  seconds and a paid call per query.
 
 ## Lessons learned
 
