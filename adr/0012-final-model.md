@@ -36,7 +36,7 @@ classical model (this is a deep-learning course), and the language feature was n
 - Every model scored higher on museum B than on validation, so museum B looks easier (named artists only). Do not expect 86% in a real
   second museum.
 - Weak points (P10, validation; on test the same pairs dominate): cityscape predicted as landscape (19% of the cityscapes), religious
-  painting and portrait mixed up, portrait called still life. The true genre is the first or second choice for 95% of the images, but 29 of
+  painting and portrait mixed up, portrait called still life. The true genre is the first or second choice for 95% of the validation images (a diagnostic: the test set is scored on the first choice only), but 29 of
   the 80 mistakes had a confidence above 0.8: many errors are probably ambiguous labels, not fixable by a better model. Cubism and
   Symbolism are the hardest styles.
 - The ResNet works at 224 px and the CNNs at 64 px: pretraining and resolution each explain about half of the gap (P07).

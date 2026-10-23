@@ -17,6 +17,8 @@ Short notes on **why** we made each significant choice, so we can defend it at t
 | [0011](0011-resnet-improvement-round.md) | Try a few cheap ResNet improvements before choosing the final model (P08) | Accepted |
 | [0012](0012-final-model.md) | The final model: ResNet-18 pretrained on ImageNet, last block fine-tuned, 224 px | Accepted |
 
+The whole vision work in one page, in order: [9999-vision-executive-summary.md](9999-vision-executive-summary.md).
+
 ## Still to do
 
 - The presentation (10 minutes and 5 minutes of questions), deadline 30 October 2026
