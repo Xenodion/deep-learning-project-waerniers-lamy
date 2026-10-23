@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+import torchvision
 from PIL import Image
 from torch import nn
 
@@ -282,3 +283,241 @@ def _write_table(table):
             table[column] = None  # an empty column, filled later if we ever measure it
     settings = [c for c in table.columns if c not in FIRST_COLUMNS + SCORE_COLUMNS]
     table[FIRST_COLUMNS + settings + SCORE_COLUMNS].to_csv(RESULTS_DIR / "experiments.csv", index=False)
+
+
+# --------------------------------------------------------------------------------------------------
+# 5. Experiments: a model described by a config, trained and recorded in one call
+# --------------------------------------------------------------------------------------------------
+def build_cnn(config, n_classes=5):
+    """A small CNN described by the config.
+
+    Needs: conv_channels, one entry per convolution block (for example [16, 32, 64]).
+    Optional: kernel_size (3), batch_norm (False), dropout (0.0).
+    Each block is a convolution, (batch norm), ReLU, then a max pooling that halves the image. After the last block,
+    each feature map is averaged into one number, so the final layer only has conv_channels[-1] inputs.
+    """
+    kernel = config.get("kernel_size", 3)
+    layers = []
+    in_channels = 3
+    for out_channels in config["conv_channels"]:
+        layers.append(nn.Conv2d(in_channels, out_channels, kernel, padding=kernel // 2))
+        if config.get("batch_norm", False):
+            layers.append(nn.BatchNorm2d(out_channels))
+        layers += [nn.ReLU(), nn.MaxPool2d(2)]
+        in_channels = out_channels
+    layers += [nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Dropout(config.get("dropout", 0.0)),
+               nn.Linear(in_channels, n_classes)]
+    return nn.Sequential(*layers)
+
+
+def to_images(data, size):
+    """load_data gives flat rows (height, width, channels); a CNN wants (channels, height, width). Returns a copy."""
+    converted = dict(data)
+    for key in data:
+        if key.startswith("X_"):
+            converted[key] = data[key].view(len(data[key]), size, size, 3).permute(0, 3, 1, 2).contiguous()
+    return converted
+
+
+def run_experiment(name, config, seeds=3, build_model=build_cnn, load_fn=None):
+    """Build the model described by config, train it, measure it on validation and record the run.
+
+    Steps: load the data, build the model, train (best epoch kept on validation), repeat with other seeds,
+    confusion matrix on validation, save_result. The test set is not used.
+    Needs in config: image_size, epochs, lr, batch_size, weight_decay, seed (and what build_model needs).
+    Returns a dict: model (with its best weights), result (history, best epoch...), confusion, val_acc_by_seed, stem.
+    """
+    if load_fn is None:  # the default: small images for our own CNNs
+        size = config["image_size"]
+        data = to_images(load_data(size=size), size)
+    else:  # another way to prepare the data, for example load_resnet_data
+        data = load_fn(config)
+    classes = data["classes"]
+
+    def train(seed, verbose):
+        torch.manual_seed(seed)  # the same seed gives the same starting weights
+        model = build_model(config, len(classes))
+        if verbose:
+            loss0, acc0 = evaluate(model, data["X_train"], data["y_train"])
+            print(f"{sum(p.numel() for p in model.parameters())} parameters | before training: loss {loss0:.3f} "
+                  f"(ln {len(classes)} = {np.log(len(classes)):.3f}), accuracy {acc0:.1%}")
+        result = fit(model, data, epochs=config["epochs"], lr=config["lr"], batch_size=config["batch_size"],
+                     weight_decay=config["weight_decay"], seed=seed, verbose=verbose)
+        return model, result
+
+    model, result = train(config["seed"], verbose=True)
+    print(f"\nbest validation accuracy {result['best_val_acc']:.1%} at epoch {result['best_epoch']} "
+          f"({result['seconds']:.0f} s)")
+
+    val_acc_by_seed = [result["best_val_acc"]]
+    for k, seed in enumerate(range(config["seed"] + 1, config["seed"] + seeds), start=1):  # the other seeds
+        # announce it first: each seed takes as long as the first run and prints nothing while it trains
+        print(f"seed {seed} ({k} of {seeds - 1} more): training, about {result['seconds']:.0f} s...", flush=True)
+        _, other = train(seed, verbose=False)
+        val_acc_by_seed.append(other["best_val_acc"])
+        print(f"   best validation accuracy {other['best_val_acc']:.1%} at epoch {other['best_epoch']}")
+
+    model.eval()
+    with torch.no_grad():
+        predicted = model(data["X_val"]).argmax(dim=1)
+    confusion = pd.crosstab(pd.Series([classes[i] for i in data["y_val"]], name="true genre"),
+                            pd.Series([classes[i] for i in predicted], name="predicted"))
+    confusion = confusion.reindex(index=classes, columns=classes, fill_value=0)
+
+    record = {"config": config, "n_params": sum(p.numel() for p in model.parameters()), "history": result["history"],
+              "best_epoch": result["best_epoch"], "best_val_acc": result["best_val_acc"],
+              "seconds": result["seconds"], "classes": classes, "val_confusion": confusion}
+    if len(val_acc_by_seed) > 1:
+        record["val_acc_by_seed"] = val_acc_by_seed
+    stem = save_result(name, record, weights=result["best_weights"])
+    return {"model": model, "result": result, "confusion": confusion, "val_acc_by_seed": val_acc_by_seed, "stem": stem,
+            "data": data}
+
+
+# --------------------------------------------------------------------------------------------------
+# 6. Pretrained ResNet-18 (transfer learning)
+# --------------------------------------------------------------------------------------------------
+# The network was trained on ImageNet. Most of it stays frozen, so we pass the images through the frozen part once and keep
+# the result: training then only touches the small trainable part (a new final layer, and optionally the last block).
+IMAGENET_MEAN = [0.485, 0.456, 0.406]  # what the pretrained network expects, not our own statistics
+IMAGENET_STD = [0.229, 0.224, 0.225]
+
+
+# Size of the vector that the frozen part gives for one image: the last block alone, or the three last blocks together ("multi").
+FEATURE_SIZE = {("resnet18", "last"): 512, ("resnet18", "multi"): 128 + 256 + 512,
+                ("resnet50", "last"): 2048, ("resnet50", "multi"): 512 + 1024 + 2048}
+
+
+def pretrained_resnet(arch="resnet18"):
+    """A ResNet with the ImageNet weights (downloaded the first time), in evaluation mode: "resnet18" or "resnet50"."""
+    weights = {"resnet18": torchvision.models.ResNet18_Weights, "resnet50": torchvision.models.ResNet50_Weights}[arch]
+    return getattr(torchvision.models, arch)(weights=weights.IMAGENET1K_V1).eval()
+
+
+def load_resnet_data(config, splits=("train", "val"), batch_size=64):
+    """Return a dict like load_data, with X_<split> = the images passed once through the frozen part of the ResNet.
+
+    config["finetune"] decides where the frozen part stops:
+      "head":   the whole network up to the average pooling: 512 numbers per image, only a new final layer is trained;
+      "layer4": up to the end of layer3: 256 x 14 x 14 numbers per image, so the last block (layer4) can be trained too.
+    The images are the files of the subset (224 x 224, or config["image_size"] if smaller), standardised with the ImageNet mean
+    and std; the sizes quoted above are for 224 px. The test split is only loaded if you ask for it, as in load_data (adr/0003).
+
+    Optional keys of config (the defaults give the P06 behaviour):
+      model:     "resnet18" or "resnet50", the pretrained network;
+      features:  "last" (the last block) or "multi" (average-pooled outputs of the three last blocks, joined);
+      augment:   number of augmented copies (random crop, mirror, colour) added for each TRAIN image, drawn with config["seed"];
+      flip_eval: also give X_<split>_flip, the features of the mirrored validation / test images, for flip averaging.
+    """
+    table = pd.read_csv(DATA_DIR / "split.csv")
+    size = config.get("image_size", 224)  # the files are 224 x 224; a smaller size shrinks them exactly as load_data does
+    resnet = pretrained_resnet(config.get("model", "resnet18"))
+    stem = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool, resnet.layer1)
+    if config.get("finetune", "head") == "layer4":
+        extract = nn.Sequential(stem, resnet.layer2, resnet.layer3).eval()  # layer4 is trained afterwards
+    elif config.get("features", "last") == "multi":
+        def extract(x):
+            x2 = resnet.layer2(stem(x))
+            x3 = resnet.layer3(x2)
+            x4 = resnet.layer4(x3)
+            return torch.cat([x2.mean(dim=(2, 3)), x3.mean(dim=(2, 3)), x4.mean(dim=(2, 3))], dim=1)
+    else:
+        extract = nn.Sequential(stem, resnet.layer2, resnet.layer3, resnet.layer4, resnet.avgpool, nn.Flatten()).eval()
+    mean = torch.tensor(IMAGENET_MEAN).view(1, 3, 1, 1)
+    std = torch.tensor(IMAGENET_STD).view(1, 3, 1, 1)
+    augmentation = torchvision.transforms.Compose([
+        torchvision.transforms.RandomResizedCrop(size, scale=(0.6, 1.0)),
+        torchvision.transforms.RandomHorizontalFlip(),
+        torchvision.transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+    ])
+
+    def features_of(paths, transform=None, flip=False):
+        """The frozen part applied to the images in `paths`, batch by batch (optionally augmented, or mirrored)."""
+        out = []
+        for start in range(0, len(paths), batch_size):
+            images = []
+            for path in paths[start:start + batch_size]:
+                with Image.open(DATA_DIR / path) as im:
+                    im = im.convert("RGB").resize((size, size), Image.Resampling.BILINEAR)
+                    if transform is not None:
+                        im = transform(im)
+                    images.append(np.asarray(im))
+            batch = torch.tensor(np.stack(images)).permute(0, 3, 1, 2).float() / 255
+            if flip:
+                batch = batch.flip(3)  # mirror image: flip the width
+            with torch.no_grad():  # the frozen part is never trained
+                out.append(extract((batch - mean) / std))
+        return torch.cat(out)
+
+    data = {"classes": sorted(table["label"].unique())}
+    for name in splits:
+        rows = table[table["split"] == name]
+        paths = list(rows["path"])
+        labels = torch.tensor(rows["label_idx"].to_numpy())
+        X, y = features_of(paths), labels
+        if name == "train" and config.get("augment", 0) > 0:
+            torch.manual_seed(config.get("seed", 0))  # the same augmented copies every time
+            for _ in range(config["augment"]):
+                X = torch.cat([X, features_of(paths, transform=augmentation)])
+                y = torch.cat([y, labels])
+        data["X_" + name], data["y_" + name] = X, y
+        if config.get("flip_eval") and name != "train":
+            data["X_" + name + "_flip"] = features_of(paths, flip=True)
+    return data
+
+
+def build_resnet_head(config, n_classes=5):
+    """The trainable part: a new final layer, preceded by the pretrained last block if finetune is "layer4".
+
+    Optional in config: finetune ("head" or "layer4"), dropout (0.0), and model / features as in load_resnet_data.
+    Its "weights" are only the trainable ones.
+    """
+    arch = config.get("model", "resnet18")
+    head = [nn.Dropout(config.get("dropout", 0.0)), nn.Linear(FEATURE_SIZE[(arch, config.get("features", "last"))], n_classes)]
+    if config.get("finetune", "head") == "layer4":
+        layer4 = copy.deepcopy(pretrained_resnet(arch).layer4)
+        return nn.Sequential(layer4, nn.AdaptiveAvgPool2d(1), nn.Flatten(), *head)
+    return nn.Sequential(*head)
+
+
+def evaluate_with_flip(model, X, X_flip, y, batch_size=256):
+    """Accuracy when each prediction averages the probabilities of an image and of its mirror image."""
+    model.eval()
+    correct = 0
+    with torch.no_grad():
+        for i in range(0, len(X), batch_size):
+            probs = model(X[i:i + batch_size]).softmax(dim=1) + model(X_flip[i:i + batch_size]).softmax(dim=1)
+            correct += (probs.argmax(dim=1) == y[i:i + batch_size]).sum().item()
+    return correct / len(X)
+
+
+# --------------------------------------------------------------------------------------------------
+# 7. Scoring any saved run on the test set
+# --------------------------------------------------------------------------------------------------
+def build_dense(config, n_classes=5):
+    """The dense baseline of P02: one hidden layer, described by image_size and hidden."""
+    n_inputs = 3 * config["image_size"] ** 2
+    return nn.Sequential(nn.Linear(n_inputs, config["hidden"]), nn.ReLU(), nn.Linear(config["hidden"], n_classes))
+
+
+def score_on_test(stem):
+    """Score a saved run on the test set (museum B) and write the result in experiments.csv.
+
+    It rebuilds the model and the data preparation from the run's own config (dense, cnn or resnet18), so it works for
+    every model of the project. Like add_test_score, it refuses a run that already has a test score (adr/0003).
+    Returns (loss, accuracy).
+    """
+    config = load_result(stem)["config"]
+    size = config["image_size"]
+    if config["model"] == "dense":
+        model = build_dense(config)
+        data = load_data(size=size, splits=("test",))
+    elif config["model"] == "cnn":
+        model = build_cnn(config)
+        data = to_images(load_data(size=size, splits=("test",)), size)
+    elif config["model"] in ("resnet18", "resnet50"):
+        model = build_resnet_head(config)
+        data = load_resnet_data(config, splits=("test",))
+    else:
+        raise ValueError(f"do not know how to rebuild a model of type {config['model']!r}")
+    return add_test_score(stem, model, data)
