@@ -4,6 +4,9 @@ The language part of the guide: a visitor describes a painting in words ("a stor
 shows the 5 best matches. Decisions in [ADR 0005](../../../adr/0005-nlp-recommendation-ladder.md) (why) and
 [ADR 0007](../../../adr/0007-nlp-evaluation-protocol.md) (how it is measured).
 
+**Results first:** [`SUMMARY.md`](SUMMARY.md), with its figures from `N00_executive_summary` (reads `results/nlp/`
+only, no API call).
+
 Run the notebooks in order; each adds one rung and compares it with the previous ones on the same 40 queries.
 
 | Notebook | Adds | Question |
