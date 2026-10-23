@@ -98,6 +98,10 @@ A fixed deck of 30–50 representative visitor queries covering:
 - Model: Small open VLM (e.g. `Qwen2.5-VL-3B-Instruct` or similar)
 - Generates rich concise descriptions + structured visual attributes (subject, mood, palette, lighting).
 - Quality, hallucination rate, and inference speed checked before full Museum A validation run.
+- **Prompt Design & Length Trade-off (Precision vs. Semantic Dilution):**
+  - *Too short (< 10 words):* Lacks sufficient visual vocabulary (palette, atmosphere, setting, lighting), leading to false negatives on nuanced visitor queries.
+  - *Too long (> 100 words):* Suffers from **semantic dilution** (*mean-pooling* in dense sentence embeddings averages out tokens, weakening proximity to short visitor queries).
+  - *Calibrated Sweet Spot (2 sentences, ~35–45 words):* Provides a dense, descriptive passage covering subject, setting, weather, and mood. This aligns with the optimal passage length of asymmetric bi-encoders (e.g. `all-MiniLM-L6-v2` trained on MS-MARCO) while preserving high cosine sensitivity for 3–8 word user queries.
 
 ### E2 — VLM Descriptions + Text Encoder
 - Searchable text: VLM description + metadata.

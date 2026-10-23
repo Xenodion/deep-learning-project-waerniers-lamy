@@ -200,11 +200,31 @@ BENCHMARK_QUERIES = [
 ]
 
 
-def get_benchmark_queries(category: str | None = None) -> list[dict]:
-    """Return the benchmark queries, optionally filtered by category."""
-    if category is None:
-        return BENCHMARK_QUERIES
-    return [q for q in BENCHMARK_QUERIES if q["category"] == category]
+def get_benchmark_queries(
+    category: str | None = None,
+    corpus_ids: set[str] | list[str] | None = None,
+) -> list[dict]:
+    """Return the benchmark queries, optionally filtered by category and active corpus.
+    
+    If corpus_ids is provided, filters queries so that only queries with at least one
+    relevant painting actually present in the active corpus are evaluated (preventing
+    artificial 0% penalties for images outside the searched collection).
+    """
+    queries = BENCHMARK_QUERIES if category is None else [q for q in BENCHMARK_QUERIES if q["category"] == category]
+    if corpus_ids is None:
+        return queries
+
+    corpus_set = set(corpus_ids)
+    valid_queries = []
+    for q in queries:
+        targets = [x for x in q.get("relevant_ids", []) if x in corpus_set]
+        if targets:
+            q_copy = dict(q)
+            q_copy["relevant_ids"] = targets
+            valid_queries.append(q_copy)
+        elif not q.get("relevant_ids"):
+            valid_queries.append(q)
+    return valid_queries
 
 
 def save_benchmark_json(output_path: Path | None = None) -> Path:

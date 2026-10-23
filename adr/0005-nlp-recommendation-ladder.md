@@ -18,5 +18,7 @@ A naive metadata-only search cannot answer content queries ("turbulent sea", "po
    - **E5 (Hybrid):** Weighted combination of direct visual similarity and semantic description similarity.
 3. **Lightweight production deployment:**
    - In-memory similarity search (`paintings.parquet` + `.npy` embeddings), avoiding unnecessary vector database infrastructure (< 1 ms latency, < 10 MB RAM for 3,000 images).
+4. **VLM Captioning Calibration (Precision vs. Semantic Dilution):**
+   - Prompt is strictly constrained to 2 sentences (~35–45 words). This strikes the calibrated balance between providing rich visual coverage (subjects, palette, lighting) and preventing **semantic dilution** (where mean-pooling in dense bi-encoders averages out distinct features when matching short visitor queries).
 
 **Consequences.** Clear division of labor between Vision (Alex) and Recommendation (Vincent). Results are logged in `results/nlp_experiments.csv` with standard ranking metrics (Recall@5, Recall@10, MRR).
