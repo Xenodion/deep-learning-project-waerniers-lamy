@@ -59,7 +59,7 @@ Decisions and their evidence are in [adr/](adr/README.md): start there to see wh
     │   ├── P09_comparison.ipynb          # all models side by side: accuracy, and cost per image on a CPU
     │   ├── P10_error_analysis.ipynb      # which genres the final model mixes up, and why (validation only)
     │   └── run_final.py                  # the final model: reproduces its test score on museum B (ADR 0012)
-    └── nlp/                              # natural-language part, not built (ADR 0004)
+    └── nlp/                              # natural-language part: experimental recommendation ladder E0 to E5 (ADR 0005)
 ```
 
 Conventions: all the tryouts are notebooks, to be read in order (`vision/P01` to `P10`). They share one pipeline so that results can

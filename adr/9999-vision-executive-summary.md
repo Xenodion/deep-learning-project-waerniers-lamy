@@ -2,7 +2,7 @@
 
 **What we built.** A classifier that tells the genre of a painting (portrait, landscape, cityscape, still life, religious painting) from its
 photo. The final model, a ResNet-18 pretrained on ImageNet with its last block fine-tuned, is right on **86.0% of 600 test paintings**,
-by artists it never saw, and takes about 70 ms per photo on one CPU thread. The natural-language part of the guide was not built.
+by artists it never saw, and takes about 70 ms per photo on one CPU thread. This summary covers the vision part only: the natural-language part of the guide is a separate experimental ladder (ADR 0005).
 
 Every step below is justified in an ADR (the numbered files of this folder) and measured in a notebook
 (`../src/deep_learning_project_waerniers_lamy/vision/`). Scores
@@ -12,7 +12,7 @@ are validation accuracy (480 images, about +/- 3.6 points) unless stated; "test"
 
 | # | Step | What we found | Decision |
 |---|---|---|---|
-| 1 | **Scope** (ADR 0002, 0004) | The brief asks for two features; the deliverables and the course are about the vision side. | Genre classifier only, 5 genres x 600 images from WikiArt (3,000 images, 224 px). Language part left out. |
+| 1 | **Scope** (ADR 0002, 0004) | The brief asks for two features; the deliverables and the course are about the vision side. | Genre classifier only, 5 genres x 600 images from WikiArt (3,000 images, 224 px). The language part is handled separately (ADR 0004, 0005). |
 | 2 | **Test design** (ADR 0003) | A painter's style gives away the genre: the artist alone predicts the genre of 70% of the paintings that have a named artist (chance 20%). | Two fictional museums: A (train 1,920 and validation 480) and B (test 600). No named artist in both; same number of images per genre. B is used once per model. |
 | 3 | **Dense network** (P02, ADR 0006) | 39.0% (5 seeds); it memorises the images (98% train). | Kept unchanged as the reference. Test 41.8%. |
 | 4 | **Small CNNs** (P03 to P05, ADR 0007, 0008) | 53.6%, then 58 to 61% with longer training. Batch norm learned faster but made validation erratic. A deeper CNN memorised the training set (99.7%) without gaining. | Stop at about 59%. Test 58.7 to 63.7%. |
