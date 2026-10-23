@@ -1,0 +1,235 @@
+rung,query_id,category,ndcg@5,success@5,judged@5
+R0 random,q01,object,0.0,0.0,1.0
+R0 random,q02,object,0.0,0.0,1.0
+R0 random,q03,object,0.3161638460360963,1.0,1.0
+R0 random,q04,object,0.0,0.0,1.0
+R0 random,q05,object,0.06934506308715421,0.0,1.0
+R0 random,q06,object,0.0,0.0,1.0
+R0 random,q07,object,0.0,0.0,1.0
+R0 random,q08,object,0.0,0.0,1.0
+R0 random,q09,object,0.07132875491150918,0.0,1.0
+R0 random,q11,object,0.0,0.0,1.0
+R0 random,q12,object,0.0,0.0,1.0
+R0 random,q13,scene,0.0,0.0,1.0
+R0 random,q14,scene,0.0,0.0,1.0
+R0 random,q15,scene,0.0,0.0,1.0
+R0 random,q16,scene,0.05652670087893601,0.0,1.0
+R0 random,q17,scene,0.0,0.0,1.0
+R0 random,q18,scene,0.0,0.0,1.0
+R0 random,q19,scene,0.13869012617430843,0.0,1.0
+R0 random,q20,scene,0.0,0.0,1.0
+R0 random,q21,scene,0.0,0.0,1.0
+R0 random,q22,scene,0.0,0.0,1.0
+R0 random,q23,mood_colour,0.28959830749588605,0.0,1.0
+R0 random,q24,mood_colour,0.27051296561346355,1.0,1.0
+R0 random,q25,mood_colour,0.0,0.0,1.0
+R0 random,q26,mood_colour,0.6992148198508501,1.0,1.0
+R0 random,q27,mood_colour,0.3938807921944381,1.0,1.0
+R0 random,q28,mood_colour,0.3156484524795145,1.0,1.0
+R0 random,q29,mood_colour,0.0,0.0,1.0
+R0 random,q30,mood_colour,0.13120507751234178,0.0,1.0
+R0 random,q31,mood_colour,0.0,0.0,1.0
+R0 random,q32,compound,0.0,0.0,1.0
+R0 random,q33,compound,0.0,0.0,1.0
+R0 random,q34,compound,0.0781764177375172,0.0,1.0
+R0 random,q35,compound,0.0,0.0,1.0
+R0 random,q36,compound,0.0,0.0,1.0
+R0 random,q37,compound,0.0,0.0,1.0
+R0 random,q38,compound,0.0,0.0,1.0
+R0 random,q39,compound,0.04868944994756881,0.0,1.0
+R0 random,q40,compound,0.0,0.0,1.0
+R1 metadata,q01,object,0.0,0.0,1.0
+R1 metadata,q02,object,0.0,0.0,1.0
+R1 metadata,q03,object,0.0,0.0,1.0
+R1 metadata,q04,object,0.42033290860792993,1.0,1.0
+R1 metadata,q05,object,0.2520733770000682,0.0,1.0
+R1 metadata,q06,object,0.0,0.0,1.0
+R1 metadata,q07,object,0.07816593312080208,0.0,1.0
+R1 metadata,q08,object,0.0,0.0,1.0
+R1 metadata,q09,object,0.0,0.0,1.0
+R1 metadata,q11,object,0.16958010263680803,1.0,1.0
+R1 metadata,q12,object,0.0,0.0,1.0
+R1 metadata,q13,scene,0.0,0.0,1.0
+R1 metadata,q14,scene,0.07132875491150918,0.0,1.0
+R1 metadata,q15,scene,0.0,0.0,1.0
+R1 metadata,q16,scene,0.16958010263680803,1.0,1.0
+R1 metadata,q17,scene,0.13869012617430843,0.0,1.0
+R1 metadata,q18,scene,0.04868944994756881,0.0,1.0
+R1 metadata,q19,scene,0.0,0.0,1.0
+R1 metadata,q20,scene,0.0,0.0,1.0
+R1 metadata,q21,scene,0.0,0.0,1.0
+R1 metadata,q22,scene,0.0,0.0,1.0
+R1 metadata,q23,mood_colour,0.09242447578501607,0.0,1.0
+R1 metadata,q24,mood_colour,0.28959830749588605,0.0,1.0
+R1 metadata,q25,mood_colour,0.33916020527361607,1.0,1.0
+R1 metadata,q26,mood_colour,0.4468535299918563,1.0,1.0
+R1 metadata,q27,mood_colour,0.7698724385020871,1.0,1.0
+R1 metadata,q28,mood_colour,0.14606834984270645,1.0,1.0
+R1 metadata,q29,mood_colour,0.0,0.0,1.0
+R1 metadata,q30,mood_colour,0.34519134224686937,0.0,1.0
+R1 metadata,q31,mood_colour,0.3156484524795145,1.0,1.0
+R1 metadata,q32,compound,0.0,0.0,1.0
+R1 metadata,q33,compound,0.0,0.0,1.0
+R1 metadata,q34,compound,0.2145327032398032,0.0,1.0
+R1 metadata,q35,compound,0.3716702184910473,1.0,1.0
+R1 metadata,q36,compound,0.0,0.0,1.0
+R1 metadata,q37,compound,0.0,0.0,1.0
+R1 metadata,q38,compound,0.0,0.0,1.0
+R1 metadata,q39,compound,0.3333333333333333,0.0,1.0
+R1 metadata,q40,compound,0.39032682911292027,1.0,1.0
+R2 description,q01,object,0.8539316501572934,1.0,1.0
+R2 description,q02,object,0.8869465982421278,1.0,1.0
+R2 description,q03,object,0.7226197476513831,1.0,1.0
+R2 description,q04,object,0.5348990275151709,1.0,1.0
+R2 description,q05,object,0.8613098738256916,1.0,1.0
+R2 description,q06,object,0.8761099271696507,1.0,1.0
+R2 description,q07,object,0.6054325501994834,1.0,1.0
+R2 description,q08,object,1.0,1.0,1.0
+R2 description,q09,object,0.9026211001048622,1.0,1.0
+R2 description,q11,object,0.7738931964842558,1.0,1.0
+R2 description,q12,object,1.0,1.0,1.0
+R2 description,q13,scene,0.5,0.0,1.0
+R2 description,q14,scene,0.8539316501572934,1.0,1.0
+R2 description,q15,scene,0.5525448245952542,1.0,1.0
+R2 description,q16,scene,0.5968814958455909,1.0,1.0
+R2 description,q17,scene,0.41607037852292533,1.0,1.0
+R2 description,q18,scene,0.9125299483251055,1.0,1.0
+R2 description,q19,scene,0.7919648107385373,1.0,1.0
+R2 description,q20,scene,1.0,1.0,1.0
+R2 description,q21,scene,0.3716702184910473,1.0,1.0
+R2 description,q22,scene,0.23958467719708867,1.0,1.0
+R2 description,q23,mood_colour,0.6724935386069494,1.0,1.0
+R2 description,q24,mood_colour,0.6548086577531306,1.0,1.0
+R2 description,q25,mood_colour,0.3304505065120877,1.0,1.0
+R2 description,q26,mood_colour,1.0,1.0,1.0
+R2 description,q27,mood_colour,0.9026211001048622,1.0,1.0
+R2 description,q28,mood_colour,0.5733697430514892,1.0,1.0
+R2 description,q29,mood_colour,0.5154518858797844,1.0,1.0
+R2 description,q30,mood_colour,1.0,0.0,1.0
+R2 description,q31,mood_colour,0.6548086577531306,1.0,1.0
+R2 description,q32,compound,0.41311732856427996,1.0,1.0
+R2 description,q33,compound,0.45676225929604214,1.0,1.0
+R2 description,q34,compound,0.850834274847108,1.0,1.0
+R2 description,q35,compound,0.3652848149752749,0.0,1.0
+R2 description,q36,compound,0.43380783046984833,1.0,1.0
+R2 description,q37,compound,0.3878911151966749,1.0,1.0
+R2 description,q38,compound,0.9125299483251055,1.0,1.0
+R2 description,q39,compound,0.5087403079104241,1.0,1.0
+R2 description,q40,compound,1.0,1.0,1.0
+R3 description+metadata,q01,object,1.0,1.0,1.0
+R3 description+metadata,q02,object,0.7020976466720956,1.0,1.0
+R3 description+metadata,q03,object,0.8613098738256916,1.0,1.0
+R3 description+metadata,q04,object,0.6307534724409957,1.0,1.0
+R3 description+metadata,q05,object,0.8613098738256916,1.0,1.0
+R3 description+metadata,q06,object,0.865251271803402,1.0,1.0
+R3 description+metadata,q07,object,0.28785434950844296,1.0,1.0
+R3 description+metadata,q08,object,1.0,1.0,1.0
+R3 description+metadata,q09,object,0.9026211001048622,1.0,1.0
+R3 description+metadata,q11,object,0.7112741403342752,1.0,1.0
+R3 description+metadata,q12,object,1.0,1.0,1.0
+R3 description+metadata,q13,scene,0.5,0.0,1.0
+R3 description+metadata,q14,scene,1.0,1.0,1.0
+R3 description+metadata,q15,scene,0.4697230431691693,1.0,1.0
+R3 description+metadata,q16,scene,0.6399453854227659,1.0,1.0
+R3 description+metadata,q17,scene,0.47580096470244104,1.0,1.0
+R3 description+metadata,q18,scene,0.8687949224876581,1.0,1.0
+R3 description+metadata,q19,scene,0.6265718333862743,1.0,1.0
+R3 description+metadata,q20,scene,1.0,1.0,1.0
+R3 description+metadata,q21,scene,0.5317398689291576,1.0,1.0
+R3 description+metadata,q22,scene,0.35098520806348704,1.0,1.0
+R3 description+metadata,q23,mood_colour,0.6877623875401735,1.0,1.0
+R3 description+metadata,q24,mood_colour,0.7860137352654724,1.0,1.0
+R3 description+metadata,q25,mood_colour,0.5968814958455909,1.0,1.0
+R3 description+metadata,q26,mood_colour,1.0,1.0,1.0
+R3 description+metadata,q27,mood_colour,0.7714160225925204,1.0,1.0
+R3 description+metadata,q28,mood_colour,0.8539316501572934,1.0,1.0
+R3 description+metadata,q29,mood_colour,0.4498361516118495,1.0,1.0
+R3 description+metadata,q30,mood_colour,1.0,0.0,1.0
+R3 description+metadata,q31,mood_colour,0.47036528278595785,1.0,1.0
+R3 description+metadata,q32,compound,0.8262346571285599,1.0,1.0
+R3 description+metadata,q33,compound,0.45676225929604214,1.0,1.0
+R3 description+metadata,q34,compound,0.7521866188906461,1.0,1.0
+R3 description+metadata,q35,compound,0.3652848149752749,0.0,1.0
+R3 description+metadata,q36,compound,0.5792374606819809,1.0,1.0
+R3 description+metadata,q37,compound,0.39919422348592504,1.0,1.0
+R3 description+metadata,q38,compound,0.8869465982421278,1.0,1.0
+R3 description+metadata,q39,compound,0.5147714448836773,1.0,1.0
+R3 description+metadata,q40,compound,0.9125299483251055,1.0,1.0
+R4 siglip image,q01,object,0.8539316501572934,1.0,1.0
+R4 siglip image,q02,object,0.9125299483251055,1.0,1.0
+R4 siglip image,q03,object,0.40892216721717317,0.0,1.0
+R4 siglip image,q04,object,0.8453596772450139,1.0,1.0
+R4 siglip image,q05,object,0.9807710461847231,1.0,1.0
+R4 siglip image,q06,object,0.8328094783921469,1.0,1.0
+R4 siglip image,q07,object,0.7175749781746813,1.0,1.0
+R4 siglip image,q08,object,1.0,1.0,1.0
+R4 siglip image,q09,object,0.7994765465672333,1.0,1.0
+R4 siglip image,q11,object,0.8687949224876581,1.0,1.0
+R4 siglip image,q12,object,0.0,0.0,1.0
+R4 siglip image,q13,scene,0.0,0.0,1.0
+R4 siglip image,q14,scene,1.0,1.0,1.0
+R4 siglip image,q15,scene,0.8866167491742403,1.0,1.0
+R4 siglip image,q16,scene,1.0,1.0,1.0
+R4 siglip image,q17,scene,0.8032973263229353,1.0,1.0
+R4 siglip image,q18,scene,1.0,1.0,1.0
+R4 siglip image,q19,scene,0.6670734657505132,1.0,1.0
+R4 siglip image,q20,scene,1.0,1.0,1.0
+R4 siglip image,q21,scene,0.7655022006375937,1.0,1.0
+R4 siglip image,q22,scene,0.8676182686276376,1.0,1.0
+R4 siglip image,q23,mood_colour,0.7261374126646398,1.0,1.0
+R4 siglip image,q24,mood_colour,1.0,1.0,1.0
+R4 siglip image,q25,mood_colour,1.0,1.0,1.0
+R4 siglip image,q26,mood_colour,1.0,1.0,1.0
+R4 siglip image,q27,mood_colour,0.7738931964842558,1.0,1.0
+R4 siglip image,q28,mood_colour,0.6164336326286644,1.0,1.0
+R4 siglip image,q29,mood_colour,0.7662376682915638,1.0,1.0
+R4 siglip image,q30,mood_colour,1.0,0.0,1.0
+R4 siglip image,q31,mood_colour,1.0,1.0,1.0
+R4 siglip image,q32,compound,1.0,1.0,1.0
+R4 siglip image,q33,compound,0.9832184408687481,1.0,1.0
+R4 siglip image,q34,compound,0.7726578571095908,1.0,1.0
+R4 siglip image,q35,compound,0.989141344633751,1.0,1.0
+R4 siglip image,q36,compound,0.5792374606819809,1.0,1.0
+R4 siglip image,q37,compound,0.5678523601931732,1.0,1.0
+R4 siglip image,q38,compound,0.6583626208346484,1.0,1.0
+R4 siglip image,q39,compound,0.8687949224876581,1.0,1.0
+R4 siglip image,q40,compound,1.0,1.0,1.0
+R5 hybrid,q01,object,1.0,1.0,1.0
+R5 hybrid,q02,object,0.8869465982421278,1.0,1.0
+R5 hybrid,q03,object,0.7226197476513831,1.0,1.0
+R5 hybrid,q04,object,0.8118947216573652,1.0,1.0
+R5 hybrid,q05,object,0.8613098738256916,1.0,1.0
+R5 hybrid,q06,object,0.7693968268775773,1.0,1.0
+R5 hybrid,q07,object,0.57966709139207,1.0,1.0
+R5 hybrid,q08,object,1.0,1.0,1.0
+R5 hybrid,q09,object,0.9026211001048622,1.0,1.0
+R5 hybrid,q11,object,0.7408782483994214,1.0,1.0
+R5 hybrid,q12,object,1.0,1.0,1.0
+R5 hybrid,q13,scene,0.0,0.0,1.0
+R5 hybrid,q14,scene,1.0,1.0,1.0
+R5 hybrid,q15,scene,0.8992701400310253,1.0,1.0
+R5 hybrid,q16,scene,1.0,1.0,1.0
+R5 hybrid,q17,scene,0.7383121460922933,1.0,1.0
+R5 hybrid,q18,scene,1.0,1.0,1.0
+R5 hybrid,q19,scene,0.6863024195657901,1.0,1.0
+R5 hybrid,q20,scene,1.0,1.0,1.0
+R5 hybrid,q21,scene,0.7241842264347773,1.0,1.0
+R5 hybrid,q22,scene,0.7958830702855284,1.0,1.0
+R5 hybrid,q23,mood_colour,0.8151510484299677,1.0,1.0
+R5 hybrid,q24,mood_colour,0.9026211001048622,1.0,1.0
+R5 hybrid,q25,mood_colour,1.0,1.0,1.0
+R5 hybrid,q26,mood_colour,1.0,1.0,1.0
+R5 hybrid,q27,mood_colour,0.7738931964842558,1.0,1.0
+R5 hybrid,q28,mood_colour,1.0,1.0,1.0
+R5 hybrid,q29,mood_colour,0.5317398689291576,1.0,1.0
+R5 hybrid,q30,mood_colour,1.0,0.0,1.0
+R5 hybrid,q31,mood_colour,1.0,1.0,1.0
+R5 hybrid,q32,compound,0.9327783893101107,1.0,1.0
+R5 hybrid,q33,compound,0.5610188271306912,1.0,1.0
+R5 hybrid,q34,compound,0.850834274847108,1.0,1.0
+R5 hybrid,q35,compound,0.6455067540472281,1.0,1.0
+R5 hybrid,q36,compound,0.9515234565959557,1.0,1.0
+R5 hybrid,q37,compound,0.4611392599010996,1.0,1.0
+R5 hybrid,q38,compound,0.9026211001048622,1.0,1.0
+R5 hybrid,q39,compound,1.0,1.0,1.0
+R5 hybrid,q40,compound,1.0,1.0,1.0
