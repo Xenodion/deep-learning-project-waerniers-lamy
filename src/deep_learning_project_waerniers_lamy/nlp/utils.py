@@ -38,6 +38,7 @@ DESCRIPTIONS_FILE = RESULTS_DIR / "paintings_described.csv"
 FROZEN_CONFIG = RESULTS_DIR / "frozen_config.json"
 CORPUS_SPLITS = {"dev": "val", "test": "test"}
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MAX_ATTEMPTS = 6  # per request; backoff up to 60 s, or the server's Retry-After
 
 # ponytail: minimal .env reader (KEY=VALUE lines) instead of adding python-dotenv to the shared pyproject.
 _ENV_FILE = REPO_ROOT / ".env"
@@ -126,18 +127,23 @@ def ask_vlm(model: str, image: Path, text: str, max_tokens: int, **options: obje
     }).encode()
     request = urllib.request.Request(OPENROUTER_URL, data=body, headers={
         "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}", "Content-Type": "application/json"})
-    for attempt in range(4):
+    for attempt in range(MAX_ATTEMPTS):
         try:
             with urllib.request.urlopen(request, timeout=120) as response:
                 return json.loads(response.read())["choices"][0]["message"]["content"].strip()
-        except (urllib.error.URLError, TimeoutError, KeyError):
-            if attempt == 3:
+        except urllib.error.HTTPError as e:
+            # Only rate limits (429) and server errors are worth retrying; 4xx like a bad key fail at once.
+            if attempt == MAX_ATTEMPTS - 1 or (e.code != 429 and e.code < 500):
                 raise
-            time.sleep(2 ** (attempt + 1))
+            time.sleep(float(e.headers.get("Retry-After") or min(60, 2 ** (attempt + 1))))
+        except (urllib.error.URLError, TimeoutError, KeyError):
+            if attempt == MAX_ATTEMPTS - 1:
+                raise
+            time.sleep(min(60, 2 ** (attempt + 1)))
     raise AssertionError("unreachable")
 
 
-def _run_parallel(jobs: dict[object, tuple], fn, on_result, save, workers: int = 8) -> int:
+def _run_parallel(jobs: dict[object, tuple], fn, on_result, save, workers: int = 4) -> int:
     """Run fn(*args) per job in parallel; on_result(key, value) per success, save() every 100 and at the end.
 
     Returns the number of failures (re-running skips what is already saved)."""
@@ -339,7 +345,8 @@ def _save_qrels(qrels: dict[str, dict[str, int]], path: Path) -> None:
 
 
 def _llm_grade(query: str, image: Path) -> int:
-    answer = ask_vlm(JUDGE_MODEL, image, JUDGE_PROMPT.format(query=query), 400)
+    # Generous budget: the judge's hidden reasoning tokens count against max_tokens and cut short answers.
+    answer = ask_vlm(JUDGE_MODEL, image, JUDGE_PROMPT.format(query=query), 2000)
     fields = dict(line.split(":", 1) for line in answer.splitlines() if ":" in line)
     q1, q2 = (fields.get(k, "").strip().lower().rstrip(".") for k in ("Q1", "Q2"))
     if q1 not in ("yes", "no") or q2 not in ("yes", "no"):
