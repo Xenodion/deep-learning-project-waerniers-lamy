@@ -3,7 +3,7 @@
 - **Status:** Accepted (confirmed by both of us; the baseline stays as it is, and improving it is discussed separately)
 - **Date:** 2026-10-21
 
-**Context.** Every other model (regularised dense networks, the pretrained ResNet, the classical model) needs a
+**Context.** Every other model (regularised dense networks, the CNNs, the pretrained ResNet) needs a
 reference to be compared with. Setup, in `vision/P02_dense_baseline.ipynb`: images shrunk to 32 x 32 and flattened
 (3,072 numbers), standardised with the train statistics, one hidden layer of 128 ReLU units (393,989 weights), Adam
 (learning rate 1e-3), batches of 64, 30 epochs, best epoch kept on validation. Data: 1,920 train and 480 validation
