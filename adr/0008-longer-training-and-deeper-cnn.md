@@ -1,6 +1,6 @@
 # 0008. Train the CNN for 100 epochs without batch norm, and try a deeper CNN next (P05)
 
-- **Status:** Proposed (to confirm: `cnn_longer` becomes the reference, batch norm is set aside)
+- **Status:** Accepted
 - **Date:** 2026-10-22
 
 **Context.** ADR 0007 found that the first CNN underfits and listed what to try. P04

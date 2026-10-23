@@ -4,6 +4,8 @@ notebooks/data/
 data/
 # Model weights are big: we commit the results pickles (metrics) but not the weights
 results/*.pt
+# the one trained model the teacher needs (32 MB): see run_final.py
+!results/final_model.pt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

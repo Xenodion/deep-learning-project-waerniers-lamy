@@ -1,6 +1,6 @@
 # 0007. Keep the first CNN as the reference for convolutional models: 3 blocks, 64 px
 
-- **Status:** Proposed (to confirm: this CNN stays unchanged, as the dense baseline does in ADR 0006)
+- **Status:** Accepted
 - **Date:** 2026-10-22
 
 **Context.** The dense baseline (ADR 0006) scores 39.0% on validation and overfits. The next question is what

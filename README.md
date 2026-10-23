@@ -40,7 +40,8 @@ Files marked *(planned)* are not written yet. Decisions and their evidence are i
 ├── pyproject.toml, uv.lock               # dependencies, managed with uv
 ├── adr/                                  # architecture decision records: why we made each choice
 ├── data/                                 # downloaded images and split.csv (ignored by Git, never committed)
-├── results/                              # one dated pickle per run + experiments.csv (settings and scores of every run)
+├── results/                              # one dated pickle per run + experiments.csv (settings and scores of every run);
+│                                         # final_model.pt is the trained final model (the other weights are not in Git)
 └── src/deep_learning_project_waerniers_lamy/
     ├── vision/                           # computer vision: the genre classifier
     │   ├── make_wikiart_subset.py        # downloads the 5-genre subset (course script, unchanged)
@@ -54,7 +55,8 @@ Files marked *(planned)* are not written yet. Decisions and their evidence are i
     │   ├── P07_resnet_resolution_control.ipynb  # the ResNet on small images: pretraining or resolution?
     │   ├── P08_resnet_improvements.ipynb  # cheap ResNet improvements: several layers, augmentation, ResNet-50 (ADR 0011)
     │   ├── P09_comparison.ipynb          # all models side by side: accuracy, and cost per image on a CPU
-    │   └── run_final.py                  # (planned) loads the chosen model and scores it once on museum B
+    │   ├── P10_error_analysis.ipynb      # which genres the ResNet mixes up, and why (validation only)
+    │   └── run_final.py                  # the final model: reproduces its test score on museum B (ADR 0012)
     └── nlp/                              # natural-language part, deferred (ADR 0004)
 ```
 
@@ -73,3 +75,19 @@ python -c "from deep_learning_project_waerniers_lamy.vision.utils import make_sp
 ```
 
 Then open `P01_explore_data.ipynb` to look at the data, and `P02_dense_baseline.ipynb` to train the baseline.
+
+## FINAL MODEL
+The final model is a ResNet-18 pretrained on ImageNet, with its last block fine-tuned on our paintings, working on 224 px images
+([ADR 0012](adr/0012-final-model.md)). It scores **86.0% on the test set** (museum B: 600 paintings by artists never seen in
+training) and 83.3% on validation, and takes about 70 ms per photo on one CPU thread.
+
+To see its test score, once the data is built (above), from the repository root:
+
+```
+uv sync
+uv run python src/deep_learning_project_waerniers_lamy/vision/run_final.py
+```
+
+It takes about a minute. It loads the trained weights from `results/final_model.pt` and prints the accuracy, the loss, the accuracy per
+genre and the confusion matrix, next to the score recorded when the model was first scored. Add `--train` to train the model again first
+(about 15 minutes). The first run needs an internet connection to download the ImageNet weights of ResNet-18 (45 MB).
