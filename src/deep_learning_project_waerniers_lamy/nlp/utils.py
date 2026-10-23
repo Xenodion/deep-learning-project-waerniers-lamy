@@ -24,21 +24,37 @@ import pandas as pd
 import torch
 from PIL import Image
 from sentence_transformers import SentenceTransformer
+from sklearn.metrics import cohen_kappa_score
 from transformers import AutoModel, AutoProcessor
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DATA_DIR = REPO_ROOT / "data" / "wikiart_genre5"
-CACHE_DIR = DATA_DIR / "nlp_cache"
+DATA_DIR = REPO_ROOT / "data" / "wikiart_genre5"  # shared with vision: read-only here (metadata.csv, split.csv)
+NLP_DATA_DIR = DATA_DIR / "nlp"  # NLP-only scratch (embedding cache, judging pages), never read by vision
+CACHE_DIR = NLP_DATA_DIR / "cache"
 RESULTS_DIR = REPO_ROOT / "results" / "nlp"
-DESCRIPTIONS_FILE = DATA_DIR / "descriptions_qwen3-vl-8b-instruct.json"
+# Committed: id -> description for dev + test only. Joined on id at load time; metadata and split stay in their
+# original files so there is one source of truth for the split.
+DESCRIPTIONS_FILE = RESULTS_DIR / "paintings_described.csv"
 FROZEN_CONFIG = RESULTS_DIR / "frozen_config.json"
 CORPUS_SPLITS = {"dev": "val", "test": "test"}
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# ponytail: minimal .env reader (KEY=VALUE lines) instead of adding python-dotenv to the shared pyproject.
+_ENV_FILE = REPO_ROOT / ".env"
+if _ENV_FILE.exists():
+    for _line in _ENV_FILE.read_text(encoding="utf-8").splitlines():
+        if "=" in _line and not _line.lstrip().startswith("#"):
+            _key, _value = _line.split("=", 1)
+            os.environ.setdefault(_key.strip(), _value.strip().strip('"').strip("'"))
 
 VLM_MODEL = "qwen/qwen3-vl-8b-instruct"
 VLM_PROMPT = (
     "Analyze this fine-art painting concisely for museum visitors. "
     "Describe the visible subjects, setting, landscape, weather, colors and atmosphere in 2 sentences."
 )
+# Judge from another model family than the description generator, so it does not favour Qwen-written text.
+JUDGE_MODEL = "google/gemini-3.8-flash"
+MIN_KAPPA = 0.6  # judge accepted only if its agreement with the human sample is at least "substantial"
 TEXT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 SIGLIP_MODEL = "google/siglip-base-patch16-224"
 HYBRID_ALPHA = 0.5  # ASSUMPTION: equal weight, not tuned (ADR 0007)
@@ -98,22 +114,21 @@ QUERIES.insert(0, "query_id", [f"q{i:02d}" for i in range(1, len(QUERIES) + 1)])
 # --------------------------------------------------------------------------------------------------
 # VLM descriptions (OpenRouter, run once)
 # --------------------------------------------------------------------------------------------------
-def _describe_image(path: Path, api_key: str) -> str:
+def ask_vlm(model: str, image: Path, text: str, max_tokens: int, **options: object) -> str:
+    """One image + text request to OpenRouter (temperature 0), retried with backoff. Needs OPENROUTER_API_KEY."""
     body = json.dumps({
-        "model": VLM_MODEL, "temperature": 0, "max_tokens": 60,
+        "model": model, "temperature": 0, "max_tokens": max_tokens, **options,
         "messages": [{"role": "user", "content": [
             {"type": "image_url",
-             "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(path.read_bytes()).decode()}},
-            {"type": "text", "text": VLM_PROMPT},
+             "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(image.read_bytes()).decode()}},
+            {"type": "text", "text": text},
         ]}],
     }).encode()
-    request = urllib.request.Request(
-        "https://openrouter.ai/api/v1/chat/completions", data=body,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-    )
+    request = urllib.request.Request(OPENROUTER_URL, data=body, headers={
+        "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}", "Content-Type": "application/json"})
     for attempt in range(4):
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
+            with urllib.request.urlopen(request, timeout=120) as response:
                 return json.loads(response.read())["choices"][0]["message"]["content"].strip()
         except (urllib.error.URLError, TimeoutError, KeyError):
             if attempt == 3:
@@ -122,27 +137,45 @@ def _describe_image(path: Path, api_key: str) -> str:
     raise AssertionError("unreachable")
 
 
-def generate_descriptions(limit: int | None = None, workers: int = 8) -> dict[str, str]:
-    """Describe every dev + test painting not yet in DESCRIPTIONS_FILE (resumable). Needs OPENROUTER_API_KEY."""
-    api_key = os.environ["OPENROUTER_API_KEY"]
-    paintings = pd.concat([load_corpus("dev"), load_corpus("test")])
-    done = load_descriptions() if DESCRIPTIONS_FILE.exists() else {}
-    todo = paintings[~paintings["id"].isin(done)].head(limit)
+def _run_parallel(jobs: dict[object, tuple], fn, on_result, save, workers: int = 8) -> int:
+    """Run fn(*args) per job in parallel; on_result(key, value) per success, save() every 100 and at the end.
+
+    Returns the number of failures (re-running skips what is already saved)."""
+    failures = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(_describe_image, DATA_DIR / r.path, api_key): r.id for r in todo.itertuples()}
+        futures = {pool.submit(fn, *args): key for key, args in jobs.items()}
         for n, future in enumerate(as_completed(futures), start=1):
             try:
-                done[futures[future]] = future.result()
-            except (urllib.error.URLError, TimeoutError, KeyError) as e:
+                on_result(futures[future], future.result())
+            except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
+                failures += 1
                 print(f"failed {futures[future]}: {e} (re-run to retry)")
-            if n % 50 == 0 or n == len(futures):
-                DESCRIPTIONS_FILE.write_text(json.dumps(done, indent=1, ensure_ascii=False), encoding="utf-8")
-                print(f"{n}/{len(futures)} done, {len(done)} descriptions saved")
+            if n % 100 == 0:
+                save()
+                print(f"{n}/{len(futures)}")
+    save()
+    return failures
+
+
+def generate_descriptions(limit: int | None = None) -> dict[str, str]:
+    """Describe every dev + test painting not yet in DESCRIPTIONS_FILE (resumable, saved at the end)."""
+    paintings = pd.concat([load_corpus("dev"), load_corpus("test")])
+    done = load_descriptions() if DESCRIPTIONS_FILE.exists() else {}
+    todo = paintings[~paintings["id"].isin(done)]
+    todo = todo if limit is None else todo.head(limit)
+    jobs = {r.id: (VLM_MODEL, DATA_DIR / r.path, VLM_PROMPT, 60) for r in todo.itertuples()}
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    def save() -> None:
+        pd.Series(done, name="description").rename_axis("id").sort_index().to_csv(DESCRIPTIONS_FILE)
+
+    failures = _run_parallel(jobs, ask_vlm, done.__setitem__, save)
+    print(f"{len(done)} descriptions in {DESCRIPTIONS_FILE}, {failures} failed")
     return done
 
 
 def load_descriptions() -> dict[str, str]:
-    return json.loads(DESCRIPTIONS_FILE.read_text(encoding="utf-8"))
+    return pd.read_csv(DESCRIPTIONS_FILE, index_col="id")["description"].to_dict()
 
 
 def artist_leak_rate(paintings: pd.DataFrame, descriptions: dict[str, str]) -> float:
@@ -264,12 +297,14 @@ def latency_ms(rung, *args) -> float:
 
 
 # --------------------------------------------------------------------------------------------------
-# Judging: blind, graded (0/1/2), pooled on the top-K, incremental
+# Judging: blind, graded (0/1/2), pooled on the top-K, incremental; LLM judge validated against a human sample
 # --------------------------------------------------------------------------------------------------
+# Same scale for the human and the LLM judge: Q1 "is the main subject of the query visible?",
+# Q2 "does the painting match the whole query?". Grade = 0 if not Q1, 2 if Q1 and Q2, else 1.
 RUBRIC = [
-    "2 - clear match: the painting shows what the query asks for.",
-    "1 - partial: the main subject is there but a qualifier is missing or weak (e.g. a sea, but calm).",
-    "0 - no match.",
+    "0 - the main subject of the query is not in the painting.",
+    "1 - the main subject is there, but part of the query is not satisfied (e.g. a sea, but calm).",
+    "2 - the painting matches the whole query.",
 ]
 
 
@@ -287,35 +322,81 @@ def top_k_ids(scores: np.ndarray, paintings: pd.DataFrame, k: int = K) -> list[l
     return [ids[np.argsort(-row)[:k]].tolist() for row in scores]
 
 
-def write_judging_page(corpus: str, scores: dict[str, np.ndarray], paintings: pd.DataFrame) -> int:
-    """Page with every top-K painting of the given rungs not judged yet. Shows only query + image. Returns #items."""
+# Two yes/no questions, grade derived by rule: asked for a 0/1/2 digit directly, the judge answered 1 even when it
+# wrote that the subject was absent ("no skull visible. Grade: 1").
+JUDGE_PROMPT = (
+    'A museum visitor searched for: "{query}"\n\n'
+    "Look at the attached painting and answer two yes/no questions.\n"
+    "Q1: Is the main subject of the search visible in the painting?\n"
+    "Q2: Does the painting match the whole search, including every detail it asks for?\n\n"
+    "Reply in exactly this format:\nSeen: <one short sentence>\nQ1: yes or no\nQ2: yes or no"
+)
+
+
+def _save_qrels(qrels: dict[str, dict[str, int]], path: Path) -> None:
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(qrels, indent=1, sort_keys=True), encoding="utf-8")
+
+
+def _llm_grade(query: str, image: Path) -> int:
+    answer = ask_vlm(JUDGE_MODEL, image, JUDGE_PROMPT.format(query=query), 400)
+    fields = dict(line.split(":", 1) for line in answer.splitlines() if ":" in line)
+    q1, q2 = (fields.get(k, "").strip().lower().rstrip(".") for k in ("Q1", "Q2"))
+    if q1 not in ("yes", "no") or q2 not in ("yes", "no"):
+        raise ValueError(f"judge answered {answer!r}")
+    return 0 if q1 == "no" else 2 if q2 == "yes" else 1
+
+
+def judge_with_llm(corpus: str, scores: dict[str, np.ndarray], paintings: pd.DataFrame) -> dict[str, dict[str, int]]:
+    """Grade every top-K painting of the given rungs not graded yet. The judge sees only the query and the image."""
     qrels = load_qrels(corpus)
     paths = dict(zip(paintings["id"], paintings["path"]))
-    rng = random.Random(SEED)
-    items = []
-    for qi, (qid, text) in enumerate(zip(QUERIES["query_id"], QUERIES["text"])):
-        new = sorted({pid for s in scores.values() for pid in top_k_ids(s, paintings)[qi]} - set(qrels.get(qid, {})))
-        rng.shuffle(new)
-        items += [{"qid": qid, "query": text, "pid": pid, "src": paths[pid]} for pid in new]
-    page = (_PAGE.replace("__ITEMS__", json.dumps(items)).replace("__KEY__", f"judging_{corpus}_{len(items)}")
-            .replace("__RUBRIC__", "".join(f"<li>{r}</li>" for r in RUBRIC))
-            .replace("__EXPORT__", f"judgments_{corpus}.json"))
-    (DATA_DIR / f"judging_{corpus}.html").write_text(page, encoding="utf-8")
-    print(f"{len(items)} new items to judge: open {DATA_DIR / f'judging_{corpus}.html'} in a browser, then export.")
-    return len(items)
-
-
-def import_judgments(corpus: str, export_file: Path) -> dict[str, dict[str, int]]:
-    """Merge a judging-page export into results/nlp/qrels_<corpus>.json."""
-    qrels = load_qrels(corpus)
-    for qid, grades in json.loads(Path(export_file).read_text(encoding="utf-8")).items():
-        if any(g not in (0, 1, 2) for g in grades.values()):
-            raise ValueError(f"{qid}: grades must be 0, 1 or 2.")
-        qrels.setdefault(qid, {}).update(grades)
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    qrels_path(corpus).write_text(json.dumps(qrels, indent=1, sort_keys=True), encoding="utf-8")
-    print(f"{sum(map(len, qrels.values()))} judgments in {qrels_path(corpus)}")
+    jobs = {
+        (qid, pid): (text, DATA_DIR / paths[pid])
+        for qi, (qid, text) in enumerate(zip(QUERIES["query_id"], QUERIES["text"]))
+        for pid in {p for s in scores.values() for p in top_k_ids(s, paintings)[qi]}
+        if pid not in qrels.get(qid, {})
+    }
+    print(f"{len(jobs)} new (query, painting) pairs to grade with {JUDGE_MODEL}")
+    failures = _run_parallel(jobs, _llm_grade, lambda key, g: qrels.setdefault(key[0], {}).__setitem__(key[1], g),
+                             lambda: _save_qrels(qrels, qrels_path(corpus)))
+    print(f"{sum(map(len, qrels.values()))} judgments in {qrels_path(corpus)}, {failures} failed")
     return qrels
+
+
+def write_calibration_page(corpus: str, paintings: pd.DataFrame, n: int = 150) -> Path:
+    """Seeded random sample of the judged pairs, for a human to grade blind (query + image only) on a static page."""
+    pairs = sorted((qid, pid) for qid, grades in load_qrels(corpus).items() for pid in grades)
+    sample = random.Random(SEED).sample(pairs, min(n, len(pairs)))
+    text = dict(zip(QUERIES["query_id"], QUERIES["text"]))
+    paths = dict(zip(paintings["id"], paintings["path"]))
+    items = [{"qid": q, "query": text[q], "pid": p, "src": "../" + paths[p]} for q, p in sample]
+    page = NLP_DATA_DIR / f"calibration_{corpus}.html"
+    NLP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    page.write_text(_PAGE.replace("__ITEMS__", json.dumps(items)).replace("__KEY__", f"calibration_{corpus}")
+                    .replace("__RUBRIC__", "".join(f"<li>{r}</li>" for r in RUBRIC))
+                    .replace("__EXPORT__", f"calibration_{corpus}.json"), encoding="utf-8")
+    print(f"{len(items)} pairs: open {page} in a browser, grade with keys 0/1/2, then click 'export JSON'.")
+    return page
+
+
+def import_calibration(corpus: str, export_file: Path) -> None:
+    """Save the human grades of the calibration page as results/nlp/qrels_<corpus>_human.json."""
+    human = json.loads(Path(export_file).read_text(encoding="utf-8"))
+    if any(g not in (0, 1, 2) for grades in human.values() for g in grades.values()):
+        raise ValueError("grades must be 0, 1 or 2.")
+    _save_qrels(human, RESULTS_DIR / f"qrels_{corpus}_human.json")
+
+
+def judge_agreement(corpus: str) -> dict[str, float]:
+    """Linear-weighted Cohen's kappa between the LLM judge and the human calibration grades, plus the confusion."""
+    human = json.loads((RESULTS_DIR / f"qrels_{corpus}_human.json").read_text(encoding="utf-8"))
+    llm = load_qrels(corpus)
+    pairs = [(g, llm[q][p]) for q, grades in human.items() for p, g in grades.items()]
+    h, j = zip(*pairs)
+    print(pd.crosstab(pd.Series(h, name="human"), pd.Series(j, name="judge")))
+    return {"kappa": float(cohen_kappa_score(h, j, weights="linear")), "n": len(pairs),
+            "exact_agreement": float(np.mean(np.asarray(h) == np.asarray(j)))}
 
 
 # --------------------------------------------------------------------------------------------------
@@ -413,14 +494,22 @@ def _sha(text: str) -> str:
 
 def current_config() -> dict[str, str | float]:
     return {"vlm_model": VLM_MODEL, "vlm_prompt": _sha(VLM_PROMPT), "text_model": TEXT_MODEL,
-            "siglip_model": SIGLIP_MODEL, "hybrid_alpha": HYBRID_ALPHA,
-            "descriptions": _sha(DESCRIPTIONS_FILE.read_text(encoding="utf-8")), "queries": _sha(QUERIES.to_json())}
+            "siglip_model": SIGLIP_MODEL, "hybrid_alpha": HYBRID_ALPHA, "judge_model": JUDGE_MODEL,
+            "judge_prompt": _sha(JUDGE_PROMPT), "descriptions": _sha(DESCRIPTIONS_FILE.read_text(encoding="utf-8")),
+            "queries": _sha(QUERIES.to_json())}
 
 
 def freeze(best_single: str) -> None:
-    """Write the config used on dev; `best_single` (R3 or R4, chosen on dev) is the reference for the hybrid on test."""
+    """Write the config used on dev; refuses if the LLM judge was not validated on dev.
+
+    `best_single` (R3 or R4, chosen on dev) is the reference for the hybrid on Museum B.
+    """
+    agreement = judge_agreement("dev")
+    if agreement["kappa"] < MIN_KAPPA:
+        raise RuntimeError(f"Judge kappa {agreement['kappa']:.2f} < {MIN_KAPPA}: grade dev by hand instead (ADR 0007).")
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    FROZEN_CONFIG.write_text(json.dumps({**current_config(), "best_single": best_single}, indent=1), encoding="utf-8")
+    config = {**current_config(), "best_single": best_single, "judge_kappa_dev": round(agreement["kappa"], 3)}
+    FROZEN_CONFIG.write_text(json.dumps(config, indent=1), encoding="utf-8")
 
 
 def check_frozen() -> dict[str, str | float]:
@@ -428,7 +517,7 @@ def check_frozen() -> dict[str, str | float]:
     if not FROZEN_CONFIG.exists():
         raise RuntimeError("Museum B is locked: finish the dev notebooks and call freeze() first.")
     frozen = json.loads(FROZEN_CONFIG.read_text(encoding="utf-8"))
-    drift = {k: v for k, v in current_config().items() if frozen[k] != v}
+    drift = {k: v for k, v in current_config().items() if frozen.get(k) != v}
     if drift:
         raise RuntimeError(f"Config changed since freeze: {drift}. Museum B results would not be valid.")
     return frozen

@@ -19,10 +19,14 @@ weight was tuned on the queries it was reported on. Every v0 number is void; the
 - **Queries.** 40 visual queries in 4 categories (object, scene, mood and colour, compound), written before any v1 result
   existed, the same set on both museums. No metadata queries: their labels would come from the fields the baseline
   searches, so the baseline would win them by construction.
-- **Judgments.** For each query, the top 5 of every rung are pooled and graded by hand on a page that shows only the
-  query and the image (no description, artist, style or rung). Unjudged paintings count as 0. A query with nothing
-  relevant judged is dropped, and the count is reported. Dev is judged rung by rung (one notebook per rung, only the new
-  paintings each time); Museum B is judged in one shuffled pass, fully blind.
+- **Judgments.** For each query, the top 5 of every rung are pooled and graded by an LLM judge
+  (`google/gemini-3.8-flash`, another family than the Qwen description generator, so it does not favour Qwen text). It
+  sees only the query and the image (no description, artist, style or rung) and answers two yes/no questions: is the
+  main subject there, does the painting match the whole query; the grade follows by rule (0, 1 or 2). Asked for a digit
+  directly, it answered 1 even when it wrote that the subject was absent. The judge is **validated**: a human grades a
+  seeded random sample of 150 dev pairs blind on the same scale, and `freeze()` refuses unless the linear-weighted kappa
+  is at least 0.6; the kappa is reported. Unjudged paintings count as 0. A query with nothing relevant judged is
+  dropped, and the count is reported. Each notebook grades only the new top-5 paintings of its rung.
 - **Ladder.** Two branches then a fusion, one change at a time inside the text branch: R0 random, R1 metadata, R2 VLM
   description, R3 description + metadata (MiniLM); R4 SigLIP image; R5 = R3 + R4 on per-query z-scores (raw cosines of
   the two encoders are on different scales) with equal weight, **not tuned**. Descriptions: one model
@@ -34,13 +38,16 @@ weight was tuned on the queries it was reported on. Every v0 number is void; the
   queries. The test notebook refuses to run if any of them changed.
 
 **Rejected.** Fixing the old ids (the qrels would still be incomplete and the queries already seen with results);
-tuning the hybrid weight (judgments pooled from a few weights favour those weights); an LLM or VLM judge (cheap, but
-needs validation against human grades, and a Qwen judge would favour Qwen descriptions); web scraping of painting texts
+tuning the hybrid weight (judgments pooled from a few weights favour those weights); grading all ~1,600 pairs by hand
+(too long for one person; the validated judge plus 150 human grades is cheaper and measurable); a Qwen judge (would
+favour Qwen descriptions); a routing model such as Jev Router (the model behind each answer changes, so the kappa
+would not carry over); web scraping of painting texts
 (`results/nlp/v0_scraping_feasibility_report.json`: 25% of paintings identified, 0% with an unknown artist).
 
-**Consequences.** About 800 judgments per museum, roughly 45 minutes each. The numbers become defensible but uncertain:
+**Consequences.** About 800 graded pairs per museum, a few dollars of API calls, and 10 to 15 minutes of human grading. The numbers become defensible but uncertain:
 with 40 queries, gaps of a few nDCG points are not detectable, so we read the intervals before the p-values. Known
-limits to state in the report: a single judge who also built the systems; dev judged rung by rung; relevant paintings
+limits to state in the report: the grades are an LLM's, trusted only as far as its kappa with one human (who also
+built the systems); the judge is validated on dev only and assumed to behave the same on Museum B; relevant paintings
 that no rung retrieved stay invisible (estimated with R0's random paintings: the pool miss rate); the VLM may recognise
 famous paintings (checked with the share of descriptions naming the artist). Dev and Museum B absolute scores are not
 comparable (480 vs 600 paintings); the gaps between rungs are. A new rung is scored only after its new top-5 paintings

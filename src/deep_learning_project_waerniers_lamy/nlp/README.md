@@ -14,10 +14,12 @@ Run the notebooks in order; each adds one rung and compares it with the previous
 | `N04_hybrid` | R5 hybrid; then `freeze()` | does fusion beat the better branch? |
 | `N05_test_museum_b` | all rungs on Museum B, once | do the gaps hold on unseen artists? |
 
-Each notebook writes a judging page (`data/wikiart_genre5/judging_<corpus>.html`, query + image only) for the paintings
-not graded yet; grade them, export, and the next cell merges them into `results/nlp/qrels_<corpus>.json`.
+Each notebook sends the new top-5 paintings of its rung to an LLM judge (query + image only); grades go to
+`results/nlp/qrels_<corpus>.json`. N04 asks you to grade 150 of them by hand on a local page
+(`data/wikiart_genre5/nlp/calibration_dev.html`) to measure the judge's agreement; `freeze()` refuses below kappa 0.6.
 
-All shared code is in `utils.py`. N02 needs an OpenRouter key (`OPENROUTER_API_KEY`) to write the descriptions once
-(about $0.30 for dev + test); everything else runs on CPU.
+All shared code is in `utils.py`. The VLM descriptions (`results/nlp/paintings_described.csv`, committed) and the
+judge go through OpenRouter: put `OPENROUTER_API_KEY=...` in the repo's `.env` (gitignored). A few dollars in total;
+retrieval itself runs on CPU.
 
 `results/nlp/v0_*` are the results of the first benchmark, kept as a record only: they are invalid (ADR 0007).
