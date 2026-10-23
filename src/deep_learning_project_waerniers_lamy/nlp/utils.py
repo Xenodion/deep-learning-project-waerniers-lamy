@@ -391,6 +391,11 @@ def write_calibration_page(corpus: str, paintings: pd.DataFrame, n: int = 150) -
 
 def import_calibration(corpus: str, export_file: Path) -> None:
     """Save the human grades of the calibration page as results/nlp/qrels_<corpus>_human.json."""
+    if not Path(export_file).exists():
+        raise FileNotFoundError(
+            f"{export_file} not found. Grade the pairs first: open {NLP_DATA_DIR / f'calibration_{corpus}.html'} in a "
+            "browser, grade with keys 0/1/2, click 'export JSON' (it downloads this file), then re-run this cell."
+        )
     human = json.loads(Path(export_file).read_text(encoding="utf-8"))
     if any(g not in (0, 1, 2) for grades in human.values() for g in grades.values()):
         raise ValueError("grades must be 0, 1 or 2.")
