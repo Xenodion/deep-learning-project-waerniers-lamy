@@ -49,10 +49,12 @@ if _ENV_FILE.exists():
             os.environ.setdefault(_key.strip(), _value.strip().strip('"').strip("'"))
 
 VLM_MODEL = "qwen/qwen3-vl-8b-instruct"
+# The length limit is in the prompt, not in max_tokens: a 60-token cap cut 99% of descriptions mid-sentence.
 VLM_PROMPT = (
-    "Analyze this fine-art painting concisely for museum visitors. "
-    "Describe the visible subjects, setting, landscape, weather, colors and atmosphere in 2 sentences."
+    "Describe this painting for a museum visitor in exactly 2 short sentences (at most 45 words in total): "
+    "the visible subjects and setting, then the colours, light and atmosphere."
 )
+VLM_MAX_TOKENS = 120  # safety net only, well above 45 words
 # Judge from another model family than the description generator, so it does not favour Qwen-written text.
 JUDGE_MODEL = "google/gemini-3.8-flash"
 MIN_KAPPA = 0.6  # judge accepted only if its agreement with the human sample is at least "substantial"
@@ -169,7 +171,7 @@ def generate_descriptions(limit: int | None = None) -> dict[str, str]:
     done = load_descriptions() if DESCRIPTIONS_FILE.exists() else {}
     todo = paintings[~paintings["id"].isin(done)]
     todo = todo if limit is None else todo.head(limit)
-    jobs = {r.id: (VLM_MODEL, DATA_DIR / r.path, VLM_PROMPT, 60) for r in todo.itertuples()}
+    jobs = {r.id: (VLM_MODEL, DATA_DIR / r.path, VLM_PROMPT, VLM_MAX_TOKENS) for r in todo.itertuples()}
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     def save() -> None:
