@@ -1,0 +1,13 @@
+{
+ "vlm_model": "qwen/qwen3-vl-8b-instruct",
+ "vlm_prompt": "5b7ef56517d7028a",
+ "text_model": "sentence-transformers/all-MiniLM-L6-v2",
+ "siglip_model": "google/siglip-base-patch16-224",
+ "hybrid_alpha": 0.5,
+ "judge_model": "google/gemini-3.8-flash",
+ "judge_prompt": "5fc94ee28ff3e01a",
+ "descriptions": "a2d8b7e73e82dfa5",
+ "queries": "0a971ee06920da40",
+ "best_single": "R4 siglip image",
+ "judge_kappa_dev": 0.65
+}
