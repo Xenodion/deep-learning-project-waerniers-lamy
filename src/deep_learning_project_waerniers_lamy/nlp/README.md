@@ -2,9 +2,9 @@
 
 The language part of the guide: a visitor describes a painting in words ("a stormy sea with big waves") and the kiosk
 shows the 5 best matches. Decisions in [ADR 0005](../../../adr/0005-nlp-recommendation-ladder.md) (why) and
-[ADR 0007](../../../adr/0007-nlp-evaluation-protocol.md) (how it is measured).
+[ADR 0013](../../../adr/0013-nlp-evaluation-protocol.md) (how it is measured).
 
-**Results first:** [`SUMMARY.md`](SUMMARY.md), with its figures from `N00_executive_summary` (reads `results/nlp/`
+**Results first:** [`adr/9998-nlp-executive-summary.md`](../../../adr/9998-nlp-executive-summary.md), with its figures from `N00_executive_summary` (reads `results/nlp/`
 only, no API call).
 
 Run the notebooks in order; each adds one rung and compares it with the previous ones on the same 40 queries.
@@ -25,4 +25,4 @@ All shared code is in `utils.py`. The VLM descriptions (`results/nlp/paintings_d
 judge go through OpenRouter: put `OPENROUTER_API_KEY=...` in the repo's `.env` (gitignored). A few dollars in total;
 retrieval itself runs on CPU.
 
-`results/nlp/v0_*` are the results of the first benchmark, kept as a record only: they are invalid (ADR 0007).
+`results/nlp/v0_*` are the results of the first benchmark, kept as a record only: they are invalid (ADR 0013).

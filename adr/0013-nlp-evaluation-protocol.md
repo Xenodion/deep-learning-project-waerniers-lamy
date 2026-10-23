@@ -1,4 +1,4 @@
-# 0007. Evaluate the NLP ladder with blind, pooled, graded judgments
+# 0013. Evaluate the NLP ladder with blind, pooled, graded judgments
 
 - **Status:** Accepted (amends [0005](0005-nlp-recommendation-ladder.md))
 - **Date:** 2026-10-23

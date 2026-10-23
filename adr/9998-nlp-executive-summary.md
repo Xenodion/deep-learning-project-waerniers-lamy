@@ -1,9 +1,9 @@
-# NLP summary: finding paintings from a visitor's words
+# NLP: executive summary
 
 A visitor types what they want to see ("a stormy sea with big waves") and the kiosk shows 5 paintings. We built the
 search one step at a time, measured every step on the same 40 queries, then ran everything once on a museum with
-artists never seen before (Museum B). Figures come from [`N00_executive_summary`](N00_executive_summary.ipynb); the
-protocol is in [ADR 0007](../../../adr/0007-nlp-evaluation-protocol.md).
+artists never seen before (Museum B). Figures come from [`N00_executive_summary`](../src/deep_learning_project_waerniers_lamy/nlp/N00_executive_summary.ipynb); the
+protocol is in [ADR 0013](0013-nlp-evaluation-protocol.md).
 
 ## Results in short
 
@@ -17,7 +17,7 @@ protocol is in [ADR 0007](../../../adr/0007-nlp-evaluation-protocol.md).
 - **Recommendation: SigLIP alone (R4).** Same quality as the hybrid within the noise, no paid call, no description to
   generate for new paintings, 82 ms per query on CPU.
 
-![The ladder on both museums](../../../results/nlp/figures/ladder.png)
+![The ladder on both museums](../results/nlp/figures/ladder.png)
 
 | Rung | What it searches | dev nDCG@5 | Museum B nDCG@5 |
 |---|---|---|---|
@@ -30,12 +30,12 @@ protocol is in [ADR 0007](../../../adr/0007-nlp-evaluation-protocol.md).
 
 ## Where each step helps
 
-![nDCG@5 per category](../../../results/nlp/figures/categories.png)
+![nDCG@5 per category](../results/nlp/figures/categories.png)
 
 Descriptions are best on objects (they name what is there); SigLIP is best on scenes, moods and colours, which a
 45-word text summarises poorly. The metadata only helps a little on mood and colour, through the style names.
 
-![One query, baseline vs hybrid](../../../results/nlp/figures/example_query.png)
+![One query, baseline vs hybrid](../results/nlp/figures/example_query.png)
 
 ## How it was measured
 
@@ -60,7 +60,7 @@ flowchart LR
 - **Museum B once:** after dev, the models, prompts, weight and hashes of the descriptions and queries were frozen; the
   test notebook refuses to run if any of them changed.
 
-![Judge vs human](../../../results/nlp/figures/judge_agreement.png)
+![Judge vs human](../results/nlp/figures/judge_agreement.png)
 
 ## Cost
 

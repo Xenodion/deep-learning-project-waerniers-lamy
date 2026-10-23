@@ -1,6 +1,6 @@
 """Shared code for the NLP notebooks: corpus, queries, VLM descriptions, retrieval rungs, judging, metrics.
 
-Protocol in ADR 0007. Two corpora, never mixed: `dev` = Museum A validation (480 paintings), `test` = Museum B
+Protocol in ADR 0013. Two corpora, never mixed: `dev` = Museum A validation (480 paintings), `test` = Museum B
 (600 paintings, unseen artists), scored once after `freeze()`.
 """
 
@@ -60,7 +60,7 @@ JUDGE_MODEL = "google/gemini-3.8-flash"
 MIN_KAPPA = 0.6  # judge accepted only if its agreement with the human sample is at least "substantial"
 TEXT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 SIGLIP_MODEL = "google/siglip-base-patch16-224"
-HYBRID_ALPHA = 0.5  # ASSUMPTION: equal weight, not tuned (ADR 0007)
+HYBRID_ALPHA = 0.5  # ASSUMPTION: equal weight, not tuned (ADR 0013)
 K = 5
 SEED = 0
 
@@ -520,7 +520,7 @@ def freeze(best_single: str) -> None:
     """
     agreement = judge_agreement("dev")
     if agreement["kappa"] < MIN_KAPPA:
-        raise RuntimeError(f"Judge kappa {agreement['kappa']:.2f} < {MIN_KAPPA}: grade dev by hand instead (ADR 0007).")
+        raise RuntimeError(f"Judge kappa {agreement['kappa']:.2f} < {MIN_KAPPA}: grade dev by hand instead (ADR 0013).")
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     config = {**current_config(), "best_single": best_single, "judge_kappa_dev": round(agreement["kappa"], 3)}
     FROZEN_CONFIG.write_text(json.dumps(config, indent=1), encoding="utf-8")
