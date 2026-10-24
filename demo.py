@@ -1,11 +1,11 @@
 """Museum Guide: the web demo of both models (genre classifier + collection search).
 
-The same file is the app of the Hugging Face / Cloud Run bundle. It reads a bundle folder made by
-scripts/build_hf_space.py (collection.csv, thumbs/, images/, siglip_embeddings.npy, final_model.pt, genre_notes.json,
+The same file is the app of the Cloud Run bundle (app/app.py). It reads a bundle folder made by
+scripts/build_app.py (collection.csv, thumbs/, images/, siglip_embeddings.npy, final_model.pt, genre_notes.json,
 scoring.json).
 
-    uv run --with gradio python scripts/build_hf_space.py     # once: builds hf_space/ from data/ and results/
-    uv run --with gradio python demo.py                       # then: http://localhost:7860
+    uv run --with gradio python scripts/build_app.py     # once: builds app/ from data/ and results/
+    uv run --with gradio python demo.py                  # then: http://localhost:7860
 """
 import copy
 import html
@@ -23,7 +23,7 @@ from torch import nn
 from torchvision.models import ResNet18_Weights, resnet18
 
 APP_DIR = Path(__file__).resolve().parent
-BUNDLE = APP_DIR if (APP_DIR / "collection.csv").exists() else APP_DIR / "hf_space"
+BUNDLE = APP_DIR if (APP_DIR / "collection.csv").exists() else APP_DIR / "app"
 MAX_CONCURRENT_JOBS, MAX_QUEUED_JOBS = 2, 16
 MAX_QUERY_CHARS = 200  # SigLIP reads 64 tokens anyway
 UPLOAD_LIMIT_BYTES = 1  # the app takes no upload: this also shuts gradio's own upload route

@@ -228,6 +228,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-hf_space/
+# Demo bundle built by scripts/build_app.py (images, embeddings, weights, copy of demo.py)
+/app/
 
 .gradio/

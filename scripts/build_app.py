@@ -1,9 +1,10 @@
-"""Build the self-contained demo bundle in hf_space/ (Museum B only: the paintings the model never saw).
+"""Build the self-contained demo bundle in app/ (Museum B only: the paintings the model never saw).
 
-    uv run --with gradio python scripts/build_hf_space.py
+    uv run --with gradio python scripts/build_app.py
 
 Needs data/wikiart_genre5 (images + split.csv) and results/final_model.pt. Writes images, thumbnails, the precomputed
-predictions of the final model, the SigLIP embeddings, and the app itself (a copy of demo.py).
+predictions of the final model, the SigLIP embeddings, and the app itself (a copy of demo.py). The Docker image of
+the online demo is built from this folder (deploy/Dockerfile).
 """
 import json
 import re
@@ -25,10 +26,10 @@ import demo  # loads the final vision model
 from deep_learning_project_waerniers_lamy.nlp import utils as nlp_utils
 
 DATA_DIR = REPO_ROOT / "data" / "wikiart_genre5"
-OUT = REPO_ROOT / "hf_space"
+OUT = REPO_ROOT / "app"
 THUMB_SIZE = 160
 RECORDED_RUN = "resnet18_layer4"  # the final run of results/experiments.csv (adr/0012)
-SDK_VERSION = "6.30.0"  # the Gradio version the app was tested with
+GRADIO_VERSION = "6.30.0"  # the Gradio version the app was tested with
 
 WIKIPEDIA_SUMMARY = "https://en.wikipedia.org/api/rest_v1/page/summary/"
 WIKIPEDIA_USER_AGENT = "museum-guide-demo/1.0 (student project)"  # Wikipedia asks API clients to identify themselves
@@ -41,7 +42,7 @@ VISION_LADDER = {"dense_baseline": "Dense network", "cnn_longer": "Small CNN", "
 DEPLOYED_RUNG = "R4 siglip image"
 JUDGE_KAPPA, PROJECT_COST_USD, HYBRID_P_VALUE = 0.65, 3.38, 0.78  # adr/9998 (judge on 150 pairs; OpenRouter bill; hybrid vs SigLIP, Museum B)
 
-REQUIREMENTS = f"""gradio=={SDK_VERSION}
+REQUIREMENTS = f"""gradio=={GRADIO_VERSION}
 torch
 torchvision
 transformers
@@ -51,21 +52,6 @@ pandas
 pillow
 filelock>=4.2.1
 numpy
-"""
-README = f"""---
-title: Museum Guide
-emoji: 🏛️
-colorFrom: green
-colorTo: yellow
-sdk: gradio
-sdk_version: {SDK_VERSION}
-app_file: app.py
-pinned: false
----
-
-Genre classifier (fine-tuned ResNet-18) and collection search (SigLIP) of the museum guide project.
-The 600 paintings are Museum B, the test set: artists the models never saw. Images come from WikiArt and are shown for
-educational use only.
 """
 
 
@@ -140,7 +126,6 @@ def main() -> None:
     shutil.copy2(REPO_ROOT / "results" / "final_model.pt", OUT / "final_model.pt")
     shutil.copy2(REPO_ROOT / "demo.py", OUT / "app.py")
     (OUT / "requirements.txt").write_text(REQUIREMENTS, encoding="utf-8")
-    (OUT / "README.md").write_text(README, encoding="utf-8")
     print(f"Bundle ready in {OUT}")
 
 

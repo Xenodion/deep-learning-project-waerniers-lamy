@@ -4,6 +4,18 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+<p align="center">
+  <a href="https://museum-guide-643636450457.europe-west1.run.app">
+    <img src="https://img.shields.io/badge/%F0%9F%8F%9B%EF%B8%8F%20Try%20the%20live%20demo-click%20a%20painting%2C%20ask%20in%20plain%20words-D6AB52?style=for-the-badge&labelColor=10201F" alt="Try the live demo">
+  </a>
+</p>
+
+<p align="center">
+  <img src="docs/img/demo-recognise.jpg" width="49%" alt="Recognise: a Van Dyck is classified as a religious painting, with the genre's Wikipedia summary">
+  <img src="docs/img/demo-ask.jpg" width="49%" alt="Ask: the query 'a stormy sea with big waves' returns six seascapes in 227 ms">
+</p>
+<p align="center"><sub>Left: the genre of an unseen painting. Right: collection search in plain words. Live, no install; first visit after a quiet period takes about 40 s to wake up.</sub></p>
+
 > **Final Project — Deep Learning Course**  
 > **Authors:** Alexandre Waerniers & Vincent Lamy  
 > **Context:** A fictional mid-sized French fine-arts museum wants an intelligent guide for gallery kiosks and visitors' phones. Gallery kiosks run on modest CPUs, the team is small, and recurring API budgets are zero. Every design choice is backed by evidence and recorded in Architecture Decision Records ([ADR](adr/README.md)).
@@ -28,15 +40,20 @@ The guide delivers two core capabilities built with PyTorch primitives:
 
 ## 🚀 Live Interactive Demo
 
-Experience both production models in an interactive museum interface:
+Both production models in a museum interface: click one of the 600 Museum B paintings (artists the model never saw) to
+get its genre, or describe a painting in plain words to search the collection. The *Info* tab holds the brief, the
+results and the cost.
 
-- **Online demo:** https://museum-guide-643636450457.europe-west1.run.app (Google Cloud Run, scales to zero: the first visit after a quiet period takes about 40 seconds to wake up; capped at one instance). Built from [`deploy/Dockerfile`](deploy/Dockerfile).
-- **Local demo** (needs `data/`, see below; the first command builds `hf_space/` from Museum B and checks that the bundled model reproduces the 86.0%):
+- **Online demo:** <https://museum-guide-643636450457.europe-west1.run.app>
+  (Google Cloud Run, scales to zero: the first visit after a quiet period takes about 40 seconds to wake up). It takes no
+  upload and caps the load; how it is built, limited and deployed is in [`deploy/README.md`](deploy/README.md).
+- **Local demo** (needs `data/`, see below; the first command builds `app/` from Museum B and checks that the bundled
+  model reproduces the 86.0%):
   ```powershell
-  uv run --with gradio python scripts/build_hf_space.py
+  uv run --with gradio python scripts/build_app.py
   uv run --with gradio python demo.py
   ```
-  *(Opens on `http://localhost:7860`. Add `--share` for a temporary public URL).*
+  *(Opens on `http://localhost:7860`).*
 
 ---
 
@@ -74,7 +91,8 @@ uv run python src/deep_learning_project_waerniers_lamy/vision/run_final.py
 
 ```
 .
-├── demo.py                  # Standalone interactive museum web application (Gradio)
+├── demo.py                  # Interactive museum web application (Gradio)
+├── deploy/                  # Dockerfile and instructions of the online demo (Cloud Run)
 ├── pyproject.toml, uv.lock  # Project dependencies and environment configuration
 ├── LICENSE                  # MIT License
 ├── adr/                     # Architecture Decision Records (why each choice was made)
@@ -84,7 +102,7 @@ uv run python src/deep_learning_project_waerniers_lamy/vision/run_final.py
 ├── src/deep_learning_project_waerniers_lamy/
 │   ├── vision/              # Vision pipeline: from dense baselines (P02) to ResNet-18 (P06-P10)
 │   └── nlp/                 # NLP pipeline: recommendation ladder from metadata (N01) to SigLIP (N03-N05)
-└── scripts/                 # Utility scripts (e.g. Hugging Face Space packager)
+└── scripts/                 # build_app.py: packages Museum B and the models into app/ (the demo bundle, not committed)
 ```
 
 ---
@@ -102,4 +120,6 @@ Every experimental milestone is documented with hypothesis, results, and archite
 
 ## ⚖️ License
 
-Code released under the [MIT License](LICENSE). Dataset images belong to their respective copyright holders on WikiArt and are used strictly under educational and non-commercial research fair-use provisions.
+Code released under the [MIT License](LICENSE). The paintings come from WikiArt and belong to their respective
+rights holders; the dataset itself is not in this repository. The online demo shows 600 of them, at reduced size, only to
+illustrate a course project (no commercial use), and they are removed on request.
