@@ -25,6 +25,8 @@ from torchvision.models import ResNet18_Weights, resnet18
 APP_DIR = Path(__file__).resolve().parent
 BUNDLE = APP_DIR if (APP_DIR / "collection.csv").exists() else APP_DIR / "hf_space"
 MAX_CONCURRENT_JOBS, MAX_QUEUED_JOBS = 2, 16
+MAX_QUERY_CHARS = 200  # SigLIP reads 64 tokens anyway
+UPLOAD_LIMIT_BYTES = 1  # the app takes no upload: this also shuts gradio's own upload route
 
 GENRES = ["cityscape", "landscape", "portrait", "religious_painting", "still_life"]
 GENRE_NAME = {"cityscape": "Cityscape", "landscape": "Landscape", "portrait": "Portrait",
@@ -174,7 +176,7 @@ document.addEventListener('click', (e) => {
 </script>"""
 
 
-EMPTY_HTML = ('<div class="card empty"><p>Choose a painting below, or drop a photo of your own.</p>'
+EMPTY_HTML = ('<div class="card empty"><p>Choose a painting below.</p>'
               '<p class="hint">The model reads the picture and names its genre.</p></div>')
 
 BRIEF_CONTEXT = ("A fictional French fine-arts museum wants a guide for visitors' phones and gallery kiosks. The kiosks have modest "
@@ -387,13 +389,8 @@ def build_app() -> gr.Blocks:
         probs, ms = timed(classify_probs, image)
         return image, verdict_html(probs, row, ms, notes)
 
-    def upload_photo(image: Image.Image | None):
-        if image is None:
-            return EMPTY_HTML
-        probs, ms = timed(classify_probs, image)
-        return verdict_html(probs, None, ms, notes)
-
     def search(query: str) -> str:
+        query = query[:MAX_QUERY_CHARS]
         if not query.strip():
             return found_html(collection, [])
         rows, ms = timed(search_order, query, embeddings, SEARCH_RESULTS)
@@ -407,7 +404,8 @@ def build_app() -> gr.Blocks:
                 gr.HTML(tab_intro("Brief, point 1. The visitor points the camera at a painting; the guide recognises its genre "
                                   "and tells the story of that tradition."))
                 with gr.Row(elem_id="stage"):
-                    preview = gr.Image(type="pil", sources=["upload"], show_label=False, elem_id="preview",
+                    # display only: visitors cannot upload anything, the server never decodes a file it did not ship
+                    preview = gr.Image(type="pil", interactive=False, show_label=False, elem_id="preview",
                                        height=320, buttons=[])
                     verdict = gr.HTML(EMPTY_HTML)
                 wall = gr.HTML(filter_wall("All"))
@@ -418,15 +416,13 @@ def build_app() -> gr.Blocks:
                 pick_go = gr.Button("pick", elem_id="pick-go", elem_classes="sr-only")
                 genre_filter.change(filter_wall, genre_filter, wall)
                 pick_go.click(select_painting, picked, [preview, verdict], js="() => [window.pickedRow]")
-                preview.upload(upload_photo, preview, verdict)
-                preview.clear(lambda: EMPTY_HTML, None, verdict)
 
             with gr.Tab("2 · Ask"):
                 gr.HTML(tab_intro("Brief, point 2. The visitor asks in plain words; the guide proposes the artworks "
                                   "of the collection that best match."))
                 with gr.Row(elem_id="search-row"):
                     query = gr.Textbox(placeholder="a stormy sea with big waves", show_label=False,
-                                       container=False, scale=5, elem_id="query")
+                                       container=False, scale=5, elem_id="query", max_length=MAX_QUERY_CHARS)
                     go = gr.Button("Search", variant="primary", scale=1)
                 with gr.Row(elem_id="chips"):
                     chips = [gr.Button(q, elem_classes="chip", size="sm") for q in EXAMPLE_QUERIES]
@@ -454,4 +450,5 @@ if __name__ == "__main__":
     # queue limits keep a public deployment from being swamped: 2 jobs at a time, at most 16 waiting
     build_app().queue(default_concurrency_limit=MAX_CONCURRENT_JOBS, max_size=MAX_QUEUED_JOBS).launch(
         server_name="0.0.0.0", server_port=args.port, share=args.share, theme=THEME, css=CSS, head=HEAD,
+        max_file_size=UPLOAD_LIMIT_BYTES,
         allowed_paths=[str(BUNDLE / "images"), str(BUNDLE / "thumbs")])  # only the paintings, not the code or weights
