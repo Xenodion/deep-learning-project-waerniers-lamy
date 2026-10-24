@@ -31,8 +31,10 @@ GENRE_NAME = {"cityscape": "Cityscape", "landscape": "Landscape", "portrait": "P
 SIGLIP_MODEL = "google/siglip-base-patch16-224"
 IMAGENET_MEAN, IMAGENET_STD = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
 SEARCH_RESULTS = 6
-EXAMPLE_QUERIES = ["a stormy sea with big waves", "a portrait of a woman wearing a hat", "a snowy winter landscape",
-                   "a busy city street with carriages", "the Virgin Mary with the infant Jesus", "a still life with fruit and wine"]
+EXAMPLE_QUERIES = ["A stormy sea with big waves.", "A portrait of a woman wearing a hat.", "A snowy winter landscape.",
+                   "A busy city street with carriages.", "The Virgin Mary with the infant Jesus.", "A still life with fruit and wine.",
+                   "A quiet village at sunset.", "A child playing outdoors.", "Flowers in a vase.", "A dark and gloomy forest.",
+                   "A sailing boat on calm water."]
 
 
 # --------------------------------------------------------------------------------------------------
@@ -174,15 +176,12 @@ document.addEventListener('click', (e) => {
 EMPTY_HTML = ('<div class="card empty"><p>Choose a painting below, or drop a photo of your own.</p>'
               '<p class="hint">The model reads the picture and names its genre.</p></div>')
 
-BRIEF_INTRO = ("A fictional fine-arts museum wants a guide for visitors' phones and gallery kiosks (modest CPUs, a small team, a "
-               "limited budget): recognise a painting and tell its story, and answer questions in plain language. "
-               "Is a neural network worth it?")
-BRIEF_ROWS = [
-    ("A feed-forward network in PyTorch", "Dense baseline: 41.8% on Museum B, memorises its training images.", "ADR 0006, P02"),
-    ("Training monitoring and failure diagnosis", "Curves for every run, over-fitting diagnosed, small CNNs, error analysis.",
-     "ADR 0007-0008, P03-P05, P10"),
-    ("A pretrained CNN (ResNet)", "ResNet-18, last block fine-tuned: 86.0% on Museum B.", "ADR 0009-0012, P06-P09"),
-    ("Worth it on a kiosk?", "Yes, among neural networks: 70 ms per photo on one CPU thread, no recurring cost.", "ADR 0004, 0012"),
+BRIEF_CONTEXT = ("A fictional French fine-arts museum wants a guide for visitors' phones and gallery kiosks. The kiosks have modest "
+                 "CPUs, the team is small and there is no budget for recurring services.")
+BRIEF_ASKS = [
+    ("Recognise a painting", "A visitor points a camera at a painting. The guide names its genre and tells the story of that tradition."),
+    ("Answer in plain words", "A visitor types what they want to see. The guide proposes the artworks of the collection that match."),
+    ("Is a neural network worth it?", "The director wants to know if it beats a classical approach, once speed and cost are counted."),
 ]
 METHOD_POINTS = [
     ("Museum A (train and validation) and Museum B (test) share no named artist: a painter's style alone gives away the genre "
@@ -193,10 +192,9 @@ METHOD_POINTS = [
 
 
 def brief_html() -> str:
-    rows = "".join(
-        f'<div class="ask"><h3>{html.escape(asked)}</h3><p>{html.escape(done)}</p><p class="hint">{html.escape(where)}</p></div>'
-        for asked, done, where in BRIEF_ROWS)
-    return f'<div class="card"><p class="said">{html.escape(BRIEF_INTRO)}</p><div class="asks">{rows}</div></div>'
+    rows = "".join(f'<div class="ask"><h3>{html.escape(asked)}</h3><p>{html.escape(done)}</p></div>' for asked, done in BRIEF_ASKS)
+    return (f'<div class="card"><h3>The brief</h3><p class="said">{html.escape(BRIEF_CONTEXT)}</p>'
+            f'<div class="asks">{rows}</div></div>')
 
 
 def method_html() -> str:
@@ -253,6 +251,11 @@ body, .gradio-container { background: var(--wall) !important; color: var(--ink);
 .gradio-container { width: 100% !important; max-width: 1320px !important; margin: 0 auto; padding: 0 clamp(12px, 3vw, 40px) 48px !important;
   font-family: 'Instrument Sans', system-ui, sans-serif; font-size: clamp(15px, 0.35vw + 13.5px, 18px); }
 footer { display: none !important; }
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: content-box; }
 #app { display: grid; grid-template-columns: auto 1fr; column-gap: 24px; align-items: end; }
 #app .tabs { display: contents; }
 #hero { grid-column: 1; grid-row: 1; padding: clamp(10px, 1.6vw, 22px) 0 10px; }
@@ -288,7 +291,7 @@ button[role=tab][aria-selected=true] { color: var(--ink) !important; border-colo
 .bar-fill { display: block; height: 100%; background: #5d7f78; border-radius: 6px; }
 .bar.top .bar-fill { background: var(--brass); }
 .bar-pct { text-align: right; font-variant-numeric: tabular-nums; }
-.matrix-wrap { overflow-x: auto; scrollbar-color: var(--line) transparent; }
+.matrix-wrap { overflow-x: auto; }
 .matrix, .matrix th, .matrix td, .matrix tr { border: none !important; }
 .matrix { border-collapse: separate; border-spacing: 4px; width: 100%; font-size: .85rem; color: var(--muted); }
 .matrix th { font-weight: 500; padding: 6px 8px; text-align: center; }
@@ -309,8 +312,8 @@ button[role=tab][aria-selected=true] { color: var(--ink) !important; border-colo
 #preview > div, #preview .image-container, #preview .upload-container, #preview .image-frame { height: 100% !important; }
 #preview, #preview .image-container, #preview .upload-container, #preview .image-frame { background: var(--panel) !important; border: 1px solid var(--line); border-radius: 14px; }
 #preview img { object-fit: contain; }
-#pick-note { text-align: center; color: var(--muted); font-size: .9rem; margin: 18px 0 10px; }
-#genre-filter { display: flex; justify-content: center; }
+#pick-note { text-align: center; color: var(--muted); font-size: .9rem; margin: 6px 0 0; }
+#genre-filter { display: flex; justify-content: center; margin-top: 12px; }
 #genre-filter .wrap { justify-content: center; gap: 8px; }
 #genre-filter label { background: var(--panel) !important; border: 1px solid var(--line) !important; border-radius: 999px !important; padding: 6px 16px !important; color: var(--muted) !important; cursor: pointer; }
 #genre-filter label.selected { background: var(--brass) !important; border-color: var(--brass) !important; color: #1a1a14 !important; font-weight: 600; }
@@ -406,10 +409,10 @@ def build_app() -> gr.Blocks:
                     preview = gr.Image(type="pil", sources=["upload"], show_label=False, elem_id="preview",
                                        height=320, buttons=[])
                     verdict = gr.HTML(EMPTY_HTML)
+                wall = gr.HTML(filter_wall("All"))
+                genre_filter = gr.Radio(filters, value="All", show_label=False, container=False, elem_id="genre-filter")
                 gr.HTML(f'<p id="pick-note">Museum B: {len(collection)} works by artists the model never saw in training. '
                         'Scroll the wall and click one.</p>')
-                genre_filter = gr.Radio(filters, value="All", show_label=False, container=False, elem_id="genre-filter")
-                wall = gr.HTML(filter_wall("All"))
                 picked = gr.Textbox(visible=False)  # only there to give the hidden button an input slot
                 pick_go = gr.Button("pick", elem_id="pick-go", elem_classes="sr-only")
                 genre_filter.change(filter_wall, genre_filter, wall)
