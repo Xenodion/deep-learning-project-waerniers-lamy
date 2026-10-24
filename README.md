@@ -30,7 +30,7 @@ The guide delivers two core capabilities built with PyTorch primitives:
 
 Experience both production models in an interactive museum interface:
 
-- **Online demo:** *(link added once deployed)*
+- **Online demo:** https://museum-guide-643636450457.europe-west1.run.app (Google Cloud Run, scales to zero: the first visit after a quiet period takes about 40 seconds to wake up; capped at one instance). Built from [`deploy/Dockerfile`](deploy/Dockerfile).
 - **Local demo** (needs `data/`, see below; the first command builds `hf_space/` from Museum B and checks that the bundled model reproduces the 86.0%):
   ```powershell
   uv run --with gradio python scripts/build_hf_space.py

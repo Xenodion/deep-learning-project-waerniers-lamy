@@ -49,6 +49,7 @@ sentencepiece
 protobuf
 pandas
 pillow
+filelock>=4.2.1
 numpy
 """
 README = f"""---

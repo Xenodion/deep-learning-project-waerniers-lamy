@@ -24,6 +24,7 @@ from torchvision.models import ResNet18_Weights, resnet18
 
 APP_DIR = Path(__file__).resolve().parent
 BUNDLE = APP_DIR if (APP_DIR / "collection.csv").exists() else APP_DIR / "hf_space"
+MAX_CONCURRENT_JOBS, MAX_QUEUED_JOBS = 2, 16
 
 GENRES = ["cityscape", "landscape", "portrait", "religious_painting", "still_life"]
 GENRE_NAME = {"cityscape": "Cityscape", "landscape": "Landscape", "portrait": "Portrait",
@@ -450,5 +451,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=7860)
     args = parser.parse_args()
     _load_siglip()  # load once at start-up, so the first search is not slow
-    build_app().launch(server_name="0.0.0.0", server_port=args.port, share=args.share, theme=THEME, css=CSS, head=HEAD,
-                       allowed_paths=[str(BUNDLE)])
+    # queue limits keep a public deployment from being swamped: 2 jobs at a time, at most 16 waiting
+    build_app().queue(default_concurrency_limit=MAX_CONCURRENT_JOBS, max_size=MAX_QUEUED_JOBS).launch(
+        server_name="0.0.0.0", server_port=args.port, share=args.share, theme=THEME, css=CSS, head=HEAD,
+        allowed_paths=[str(BUNDLE / "images"), str(BUNDLE / "thumbs")])  # only the paintings, not the code or weights
