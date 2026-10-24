@@ -36,6 +36,7 @@ WIKIPEDIA_USER_AGENT = "museum-guide-demo/1.0 (student project)"  # Wikipedia as
 WIKIPEDIA_PAGES = {"cityscape": "Cityscape", "landscape": "Landscape painting", "portrait": "Portrait",
                    "religious_painting": "Religious art", "still_life": "Still life"}
 NOTE_SENTENCES = 2
+CLASSICAL_LABEL = "Classical: colours and edges, forest"  # no network at all
 # Vision ladder: name of the run in results/experiments.csv -> label shown in the app (test scores, adr/0012)
 VISION_LADDER = {"dense_baseline": "Dense network", "cnn_longer": "Small CNN", "resnet18_head": "ResNet-18, frozen",
                  "resnet18_layer4": "ResNet-18, last block trained"}
@@ -72,8 +73,10 @@ def genre_notes() -> dict[str, dict[str, str]]:
 def scoring() -> dict:
     """The numbers of the Scoring tab: test scores of the vision ladder and nDCG@5 of the language ladder."""
     runs = pd.read_csv(REPO_ROOT / "results" / "experiments.csv")
+    classical = pd.read_csv(REPO_ROOT / "results" / "classical_baseline.csv").query("chosen")  # P11, adr/0014
     vision = [{"name": label, "test_acc": float(runs.loc[runs["name"] == run, "test_acc"].dropna().iloc[0])}
               for run, label in VISION_LADDER.items()]
+    vision.insert(1, {"name": CLASSICAL_LABEL, "test_acc": float(classical["test_acc"].iloc[0])})  # by score: after the dense network
     nlp = REPO_ROOT / "results" / "nlp"
     dev = pd.read_csv(nlp / "dev_summary.csv").set_index("rung")["nDCG@5"]
     test = pd.read_csv(nlp / "test_summary.csv").set_index("rung")["nDCG@5"]

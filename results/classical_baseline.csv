@@ -1,0 +1,6 @@
+model,train_acc,val_acc,train_seconds,chosen,test_acc,n_features,ms_per_photo_1_thread,size_mb
+"logistic regression, C=0.001",0.7844,0.5771,8,False,,1802,,
+"logistic regression, C=0.01",0.9396,0.5417,8,False,,1802,,
+"logistic regression, C=0.1",1.0,0.5229,11,False,,1802,,
+"logistic regression, C=1.0",1.0,0.5167,9,False,,1802,,
+"random forest, 300 trees",1.0,0.6,3,True,0.585,1802,42.8,22.08

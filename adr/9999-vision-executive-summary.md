@@ -20,8 +20,9 @@ are validation accuracy (480 images, about +/- 3.6 points) unless stated; "test"
 | 6 | **Pretraining or resolution?** (P07) | The ResNet saw 224 px, the CNNs 64 px. On the same 64 px images the ResNet still scores 70.2% (112 px: 75.4%). | About 12 points come from pretraining and 10 from resolution. |
 | 7 | **Improvement round** (P08, ADR 0011) | Features from several layers 80.6%, augmentation 80.8%, flip averaging +0.1, frozen ResNet-50 81.9% (twice the time). | Nothing beat our 2-point bar. No stronger model. |
 | 8 | **Cost per photo** (P09) | One CPU thread: dense 0.1 ms, small CNN 1.7 ms, ResNet-18 70 ms (45 MB), ResNet-50 139 ms (94 MB). | A neural network is worth it: fast enough for one photo at a time. |
-| 9 | **Final model** (P06 with 3 seeds, ADR 0012) | Training the last block: 83.3% in all 3 seeds against 80.3% frozen (+3.0), at the same prediction cost. | **Fine-tuned ResNet-18, 224 px. Test 86.0%.** `run_final.py` reproduces it. |
-| 10 | **Error analysis** (P10) | See below. | We stop here. |
+| 9 | **Classical baseline** (P11, ADR 0014) | Colour histograms and HOG edges, then a random forest (best of 5 models on validation: 60.0%). Test 58.5%, 43 ms and 22 MB per photo. | Above the dense network (41.8%), 5 points under the small CNN, 27.5 under the fine-tuned ResNet. A neural network is worth it, but the gain comes from pretraining, not from being a network. |
+| 10 | **Final model** (P06 with 3 seeds, ADR 0012) | Training the last block: 83.3% in all 3 seeds against 80.3% frozen (+3.0), at the same prediction cost. | **Fine-tuned ResNet-18, 224 px. Test 86.0%.** `run_final.py` reproduces it. |
+| 11 | **Error analysis** (P10) | See below. | We stop here. |
 
 ## Why 86% is close to the ceiling, and why we stopped
 
@@ -47,5 +48,5 @@ cost about twice as much to run for one or two points, so **we do not expect to 
   tested ResNet-50 frozen (never fine-tuned), and we did not add training images.
 - Every model scored higher on museum B than on validation, so museum B looks easier (named artists only): do not expect 86% in a real
   second museum.
-- No classical model was compared (this is a deep-learning course): "worth it" means worth it among neural networks.
+- The classical baseline (ADR 0014) uses one feature set fixed in advance and a forest tuned only on its size: a reference, not a competitor we tried to beat.
 - Timings come from one laptop; the ratios between models matter more than the milliseconds.

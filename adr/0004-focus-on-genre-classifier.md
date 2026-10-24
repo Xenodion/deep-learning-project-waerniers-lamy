@@ -19,3 +19,5 @@ and scored on the same museum A / museum B split as the networks. If the
 language part comes back, note that the dataset has no captions, only genre, style and artist.
 
 **Update (2026-10-22).** The classical baseline is no longer planned: this is a deep-learning course, so the director's question is answered with our neural networks.
+
+**Update (2026-10-25).** The classical baseline is back: the brief asks for it, and it costs about five minutes. See [0014](0014-classical-baseline.md).

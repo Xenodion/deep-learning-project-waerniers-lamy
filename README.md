@@ -33,7 +33,7 @@ The guide delivers two core capabilities built with PyTorch primitives:
 
 | Engine | Final Architecture | Performance | CPU Latency | Recurring Cost | Decision & Rationale |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Vision** | **Fine-tuned ResNet-18** (224 px, `layer4` trained) | **86.0% Test Accuracy** (83.3% Val) | **70 ms** / photo | $0 | Beats dense baseline (41.8%) and custom CNNs (63.7%). Pretraining and resolution explain the jump. ResNet-50 rejected (+1.6 pt for 2x latency). ([ADR 0012](adr/0012-final-model.md)) |
+| **Vision** | **Fine-tuned ResNet-18** (224 px, `layer4` trained) | **86.0% Test Accuracy** (83.3% Val) | **70 ms** / photo | $0 | Beats dense baseline (41.8%), custom CNNs (63.7%) and a classical model, colour and edge features with a random forest (58.5%, [ADR 0014](adr/0014-classical-baseline.md)). Pretraining and resolution explain the jump. ResNet-50 rejected (+1.6 pt for 2x latency). ([ADR 0012](adr/0012-final-model.md)) |
 | **NLP** | **SigLIP Dual-Tower** (`google/siglip-base-patch16-224`) | **0.79 nDCG@5** (0.81 Dev) | **82 ms** / query | $0 | 100% local CPU dot-product. VLM hybrid fusion (+0.010, p=0.78) was rejected: statistically insignificant gain, eliminating paid API dependencies. ([ADR 0005](adr/0005-nlp-recommendation-ladder.md), [ADR 0013](adr/0013-nlp-evaluation-protocol.md)) |
 
 ---
@@ -93,6 +93,7 @@ uv run python src/deep_learning_project_waerniers_lamy/vision/run_final.py
 .
 ├── demo.py                  # Interactive museum web application (Gradio)
 ├── deploy/                  # Dockerfile and instructions of the online demo (Cloud Run)
+├── docs/img/                # Screenshots of the demo shown at the top of this README
 ├── pyproject.toml, uv.lock  # Project dependencies and environment configuration
 ├── LICENSE                  # MIT License
 ├── adr/                     # Architecture Decision Records (why each choice was made)
@@ -100,7 +101,7 @@ uv run python src/deep_learning_project_waerniers_lamy/vision/run_final.py
 │   └── 9998-nlp-executive-summary.md     # 1-page summary of the Multimodal NLP research
 ├── results/                 # Metrics, benchmark logs, and production weights (final_model.pt)
 ├── src/deep_learning_project_waerniers_lamy/
-│   ├── vision/              # Vision pipeline: from dense baselines (P02) to ResNet-18 (P06-P10)
+│   ├── vision/              # Vision pipeline: dense baseline (P02) to ResNet-18 (P06-P10), classical baseline (P11)
 │   └── nlp/                 # NLP pipeline: recommendation ladder from metadata (N01) to SigLIP (N03-N05)
 └── scripts/                 # build_app.py: packages Museum B and the models into app/ (the demo bundle, not committed)
 ```
