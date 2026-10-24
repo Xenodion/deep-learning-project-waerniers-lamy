@@ -93,6 +93,7 @@ uv run python src/deep_learning_project_waerniers_lamy/vision/run_final.py
 .
 ├── demo.py                  # Interactive museum web application (Gradio)
 ├── deploy/                  # Dockerfile and instructions of the online demo (Cloud Run)
+├── docs/img/                # Screenshots of the demo shown at the top of this README
 ├── pyproject.toml, uv.lock  # Project dependencies and environment configuration
 ├── LICENSE                  # MIT License
 ├── adr/                     # Architecture Decision Records (why each choice was made)
@@ -100,7 +101,7 @@ uv run python src/deep_learning_project_waerniers_lamy/vision/run_final.py
 │   └── 9998-nlp-executive-summary.md     # 1-page summary of the Multimodal NLP research
 ├── results/                 # Metrics, benchmark logs, and production weights (final_model.pt)
 ├── src/deep_learning_project_waerniers_lamy/
-│   ├── vision/              # Vision pipeline: from dense baselines (P02) to ResNet-18 (P06-P10)
+│   ├── vision/              # Vision pipeline: dense baseline (P02) to ResNet-18 (P06-P10), classical baseline (P11)
 │   └── nlp/                 # NLP pipeline: recommendation ladder from metadata (N01) to SigLIP (N03-N05)
 └── scripts/                 # build_app.py: packages Museum B and the models into app/ (the demo bundle, not committed)
 ```

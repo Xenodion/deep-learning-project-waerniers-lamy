@@ -1,7 +1,7 @@
 [project]
 name = "deep-learning-project-waerniers-lamy"
 version = "0.1.0"
-description = "Add your description here"
+description = "Museum guide: genre recognition (fine-tuned ResNet-18) and natural-language collection search (SigLIP)"
 readme = "README.md"
 authors = [
     { name = "Xenodion", email = "alexandre.waerniers@gmail.com" }
