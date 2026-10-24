@@ -8,7 +8,7 @@ Short notes on **why** we made each significant choice, so we can defend it at t
 | [0001](0001-record-architecture-decisions.md) | Record decisions as short ADRs | Accepted |
 | [0002](0002-classification-target-and-dataset-subset.md) | 5 genres, 600 images each, 224 px | Accepted |
 | [0003](0003-simulated-museum-b-test-set.md) | Train in museum A, test once in simulated museum B | Accepted |
-| [0004](0004-focus-on-genre-classifier.md) | Focus on the genre classifier; leave the language feature for later | Accepted |
+| [0004](0004-focus-on-genre-classifier.md) | Focus on the genre classifier; leave the language feature for later | Accepted, amended by 0014 |
 | [0005](0005-nlp-recommendation-ladder.md) | Natural-language painting recommendation as an experimental multimodal ladder | Accepted, amended by 0013 |
 | [0006](0006-dense-baseline.md) | Keep the dense baseline simple and unchanged: 32 px, one hidden layer of 128 | Accepted |
 | [0007](0007-first-cnn.md) | Keep the first CNN as the reference for convolutional models: 3 blocks, 64 px | Accepted |
@@ -18,6 +18,7 @@ Short notes on **why** we made each significant choice, so we can defend it at t
 | [0011](0011-resnet-improvement-round.md) | Try a few cheap ResNet improvements before choosing the final model (P08) | Accepted |
 | [0012](0012-final-model.md) | The final model: ResNet-18 pretrained on ImageNet, last block fine-tuned, 224 px | Accepted |
 | [0013](0013-nlp-evaluation-protocol.md) | Evaluate the NLP ladder with blind, pooled, graded judgments | Accepted |
+| [0014](0014-classical-baseline.md) | A classical baseline (handcrafted features, random forest) to answer "is a neural network worth it?" | Accepted, amends 0004 |
 
 The whole vision work in one page, in order: [9999-vision-executive-summary.md](9999-vision-executive-summary.md).
 The whole NLP work in one page: [9998-nlp-executive-summary.md](9998-nlp-executive-summary.md).

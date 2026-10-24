@@ -33,7 +33,7 @@ The guide delivers two core capabilities built with PyTorch primitives:
 
 | Engine | Final Architecture | Performance | CPU Latency | Recurring Cost | Decision & Rationale |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Vision** | **Fine-tuned ResNet-18** (224 px, `layer4` trained) | **86.0% Test Accuracy** (83.3% Val) | **70 ms** / photo | $0 | Beats dense baseline (41.8%) and custom CNNs (63.7%). Pretraining and resolution explain the jump. ResNet-50 rejected (+1.6 pt for 2x latency). ([ADR 0012](adr/0012-final-model.md)) |
+| **Vision** | **Fine-tuned ResNet-18** (224 px, `layer4` trained) | **86.0% Test Accuracy** (83.3% Val) | **70 ms** / photo | $0 | Beats dense baseline (41.8%), custom CNNs (63.7%) and a classical model, colour and edge features with a random forest (58.5%, [ADR 0014](adr/0014-classical-baseline.md)). Pretraining and resolution explain the jump. ResNet-50 rejected (+1.6 pt for 2x latency). ([ADR 0012](adr/0012-final-model.md)) |
 | **NLP** | **SigLIP Dual-Tower** (`google/siglip-base-patch16-224`) | **0.79 nDCG@5** (0.81 Dev) | **82 ms** / query | $0 | 100% local CPU dot-product. VLM hybrid fusion (+0.010, p=0.78) was rejected: statistically insignificant gain, eliminating paid API dependencies. ([ADR 0005](adr/0005-nlp-recommendation-ladder.md), [ADR 0013](adr/0013-nlp-evaluation-protocol.md)) |
 
 ---

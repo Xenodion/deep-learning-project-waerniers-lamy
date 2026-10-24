@@ -26,8 +26,8 @@ the test score; `--train` trains it again.
 **Rejected.** The frozen ResNet-18 (3 points lower on validation, 1.5 on test; it stays the documented alternative, simpler and trained in a
 second); ResNet-50 (+1.6 points over ResNet-18 for twice the time and size, below our 2-point bar; set aside on validation and cost, so it is not
 scored on museum B, and it was only tested frozen, never fine-tuned); smaller images, which are the options for a slower kiosk
-(112 px: 75.4% for 21.6 ms; 64 px: 70.2% for 10.5 ms); the CNNs and the dense network (20 or more points lower). We did not compare with a
-classical model (this is a deep-learning course), and the language feature was not built (ADR 0004).
+(112 px: 75.4% for 21.6 ms; 64 px: 70.2% for 10.5 ms); the CNNs and the dense network (20 or more points lower). A classical model (colour and edge features, random forest) was compared afterwards, once the final model was fixed: 58.5% on
+museum B (ADR 0014). The language feature was not built at the time of this decision (ADR 0004; it came later, ADR 0005 and 0013).
 
 **Consequences.**
 - The choice was made on validation (480 images, about +/- 3.6 points) and the model was scored once on museum B (600 images, about
