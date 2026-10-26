@@ -137,11 +137,17 @@ def evaluate(model, X, y, batch_size=256):
     return total_loss / len(X), correct / len(X)
 
 
-def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0, verbose=True):
+def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0, verbose=True,
+        clip_grad_norm=None, monitor=False):
     """Train the model on data["X_train"] and keep the weights of the epoch with the best validation accuracy.
 
     Only train and validation are used. The model is left with its best weights.
     Returns a dict: history (the curves), best_epoch (counted from 1), best_val_acc, best_weights, seconds.
+
+    clip_grad_norm: if set, the gradient of all the weights together is scaled down to this norm before each step.
+    monitor: also record, at every epoch, what the training doctor looks at (P12). It does not change the training:
+        history gets batch_loss (the loss of every batch), and per layer (see monitored_layers) grad_norm, update_ratio,
+        act_std, dead and saturated. See record_batch and activation_stats for what each one measures.
     """
     torch.manual_seed(seed)  # fixes the shuffling; seed the model creation yourself before building it
     loss_fn = nn.CrossEntropyLoss()
@@ -149,24 +155,49 @@ def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0
     X_train, y_train = data["X_train"], data["y_train"]
 
     history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
+    if monitor:
+        weights, activations = monitored_layers(model)
+        history["batch_loss"] = []
+        for key in ["grad_norm", "update_ratio"]:
+            history[key] = {name: [] for name in weights}
+        for key in ["act_std", "dead", "saturated"]:
+            history[key] = {name: [] for name in activations}
     best_val_acc, best_epoch, best_weights = -1.0, 0, None
     start = time.time()
 
     for epoch in range(1, epochs + 1):
         model.train()
+        if monitor:
+            sums = {name: [0.0, 0.0] for name in weights}  # grad norm and update ratio, summed over the batches
         order = torch.randperm(len(X_train))  # shuffle the data at every epoch
         for i in range(0, len(order), batch_size):
             batch = order[i:i + batch_size]
             loss = loss_fn(model(X_train[batch]), y_train[batch])
             optimizer.zero_grad()
             loss.backward()
+            if monitor:
+                before = record_batch(weights, sums)  # measured before clipping, so an explosion stays visible
+                history["batch_loss"].append(loss.item())
+            if clip_grad_norm is not None:
+                nn.utils.clip_grad_norm_(model.parameters(), clip_grad_norm)
             optimizer.step()
+            if monitor:
+                for name, layer in weights.items():
+                    sums[name][1] += ((layer.weight.detach() - before[name]).norm() / (before[name].norm() + 1e-12)).item()
 
         # end of the epoch: measure on the whole train set and on the validation set
         train_loss, train_acc = evaluate(model, X_train, y_train)
         val_loss, val_acc = evaluate(model, data["X_val"], data["y_val"])
-        for key, value in zip(history, [train_loss, train_acc, val_loss, val_acc]):
+        for key, value in zip(["train_loss", "train_acc", "val_loss", "val_acc"], [train_loss, train_acc, val_loss, val_acc]):
             history[key].append(value)
+        if monitor:
+            n_batches = -(-len(order) // batch_size)
+            for name in weights:
+                history["grad_norm"][name].append(sums[name][0] / n_batches)
+                history["update_ratio"][name].append(sums[name][1] / n_batches)
+            for name, stats in activation_stats(activations, model, X_train).items():
+                for key, value in stats.items():
+                    history[key][name].append(value)
 
         if val_acc > best_val_acc:
             best_val_acc, best_epoch = val_acc, epoch
@@ -179,6 +210,80 @@ def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0
     model.load_state_dict(best_weights)
     return {"history": history, "best_epoch": best_epoch, "best_val_acc": best_val_acc,
             "best_weights": best_weights, "seconds": time.time() - start}
+
+
+# --------------------------------------------------------------------------------------------------
+# 3b. Monitoring: what the training doctor looks at (fit(..., monitor=True), P12)
+# --------------------------------------------------------------------------------------------------
+ACTIVATIONS = (nn.ReLU, nn.LeakyReLU, nn.Sigmoid, nn.Tanh)
+
+
+def monitored_layers(model):
+    """The layers fit(monitor=True) watches, by name: those with a weight matrix (Linear, Conv2d), and the activations."""
+    weights = {name: m for name, m in model.named_modules() if isinstance(m, (nn.Linear, nn.Conv2d))}
+    activations = {name: m for name, m in model.named_modules() if isinstance(m, ACTIVATIONS)}
+    return weights, activations
+
+
+def record_batch(weights, sums):
+    """After backward: add the norm of each layer's weight gradient to sums[name][0], and return a copy of the weights.
+
+    The copy lets fit measure the update ratio after the step: norm of (new weights - old weights) / norm of old weights.
+    A healthy ratio is about 1e-3 per step: far below, the layer barely learns; near 1, each step rewrites it.
+    """
+    before = {}
+    for name, layer in weights.items():
+        grad = layer.weight.grad
+        sums[name][0] += grad.norm().item() if grad is not None else 0.0
+        before[name] = layer.weight.detach().clone()
+    return before
+
+
+def activation_stats(activations, model, X, batch_size=256):
+    """Pass X through the model (evaluation mode) and describe the output of each activation layer.
+
+    For each layer, by name: act_std, the spread of its outputs (it collapses towards 0 when the signal dies out with depth);
+    dead, the share of units (neurons, or channels for a convolution) that never give a positive output on any image of X:
+    a dead ReLU gives 0 and no gradient, so it never comes back; saturated, the share of outputs stuck at the flat ends of
+    a sigmoid (below 0.02 or above 0.98) or a tanh (beyond +/- 0.96), where the gradient almost vanishes (NaN for ReLUs).
+    """
+    totals = {name: {"sum": 0.0, "sum_sq": 0.0, "count": 0, "saturated": 0, "alive": None} for name in activations}
+
+    def hook_for(name, layer):
+        def hook(module, inputs, out):
+            t = totals[name]
+            t["sum"] += out.sum().item()
+            t["sum_sq"] += (out ** 2).sum().item()
+            t["count"] += out.numel()
+            if isinstance(layer, nn.Sigmoid):
+                t["saturated"] += ((out < 0.02) | (out > 0.98)).sum().item()
+            elif isinstance(layer, nn.Tanh):
+                t["saturated"] += (out.abs() > 0.96).sum().item()
+            per_unit = out.transpose(0, 1).reshape(out.shape[1], -1)  # one row per neuron or channel
+            alive = (per_unit > 0).any(dim=1)
+            t["alive"] = alive if t["alive"] is None else t["alive"] | alive
+        return hook
+
+    handles = [layer.register_forward_hook(hook_for(name, layer)) for name, layer in activations.items()]
+    model.eval()
+    try:
+        with torch.no_grad():
+            for i in range(0, len(X), batch_size):
+                model(X[i:i + batch_size])
+    finally:
+        for handle in handles:
+            handle.remove()
+
+    stats = {}
+    for name, layer in activations.items():
+        t = totals[name]
+        mean = t["sum"] / t["count"]
+        stats[name] = {
+            "act_std": max(t["sum_sq"] / t["count"] - mean ** 2, 0.0) ** 0.5,
+            "dead": 1 - t["alive"].float().mean().item(),
+            "saturated": t["saturated"] / t["count"] if isinstance(layer, (nn.Sigmoid, nn.Tanh)) else float("nan"),
+        }
+    return stats
 
 
 # --------------------------------------------------------------------------------------------------
