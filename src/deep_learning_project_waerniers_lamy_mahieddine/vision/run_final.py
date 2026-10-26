@@ -6,8 +6,8 @@ accuracy per genre and the confusion matrix, next to the score recorded when the
 results/, and museum B was not used to choose this model (adr/0003).
 
 From the repository root:
-    python src/deep_learning_project_waerniers_lamy/vision/run_final.py            # about 1 minute
-    python src/deep_learning_project_waerniers_lamy/vision/run_final.py --train    # retrain the model first (about 15 minutes)
+    python src/deep_learning_project_waerniers_lamy_mahieddine/vision/run_final.py            # about 1 minute
+    python src/deep_learning_project_waerniers_lamy_mahieddine/vision/run_final.py --train    # retrain the model first (about 15 minutes)
 
 What it needs:
   - the images and split.csv in data/wikiart_genre5 (see "Reproduce the data" in the README). If split.csv is missing it is rebuilt;
@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/: lets this 
 import pandas as pd  # noqa: E402
 import torch  # noqa: E402
 
-from deep_learning_project_waerniers_lamy.vision import utils  # noqa: E402
+from deep_learning_project_waerniers_lamy_mahieddine.vision import utils  # noqa: E402
 
 FINAL_RUN = "resnet18_layer4"  # name of the final run in results/experiments.csv (adr/0012)
 FINAL_WEIGHTS = utils.RESULTS_DIR / "final_model.pt"

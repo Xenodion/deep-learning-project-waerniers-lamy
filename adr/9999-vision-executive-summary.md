@@ -5,7 +5,7 @@ photo. The final model, a ResNet-18 pretrained on ImageNet with its last block f
 by artists it never saw, and takes about 70 ms per photo on one CPU thread. This summary covers the vision part only: the natural-language part of the guide is a separate experimental ladder (ADR 0005).
 
 Every step below is justified in an ADR (the numbered files of this folder) and measured in a notebook
-(`../src/deep_learning_project_waerniers_lamy/vision/`). Scores
+(`../src/deep_learning_project_waerniers_lamy_mahieddine/vision/`). Scores
 are validation accuracy (480 images, about +/- 3.6 points) unless stated; "test" is museum B (600 images, about +/- 2.9 points).
 
 ## What we did, in order

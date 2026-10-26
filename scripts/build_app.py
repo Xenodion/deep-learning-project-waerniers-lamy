@@ -23,7 +23,7 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import demo  # loads the final vision model
-from deep_learning_project_waerniers_lamy.nlp import utils as nlp_utils
+from deep_learning_project_waerniers_lamy_mahieddine.nlp import utils as nlp_utils
 
 DATA_DIR = REPO_ROOT / "data" / "wikiart_genre5"
 OUT = REPO_ROOT / "app"

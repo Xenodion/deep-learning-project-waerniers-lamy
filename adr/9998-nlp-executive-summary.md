@@ -2,7 +2,7 @@
 
 A visitor types what they want to see ("a stormy sea with big waves") and the kiosk shows 5 paintings. We built the
 search one step at a time, measured every step on the same 40 queries, then ran everything once on a museum with
-artists never seen before (Museum B). Figures come from [`N00_executive_summary`](../src/deep_learning_project_waerniers_lamy/nlp/N00_executive_summary.ipynb); the
+artists never seen before (Museum B). Figures come from [`N00_executive_summary`](../src/deep_learning_project_waerniers_lamy_mahieddine/nlp/N00_executive_summary.ipynb); the
 protocol is in [ADR 0013](0013-nlp-evaluation-protocol.md).
 
 ## Results in short

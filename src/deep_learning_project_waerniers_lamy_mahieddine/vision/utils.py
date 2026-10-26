@@ -24,7 +24,7 @@ def make_split(data_dir=DATA_DIR, b_per_genre=120, val_share=0.2, seed=0):
     """Split the images into museum A (train + validation) and museum B (test), as decided in adr/0003.
 
     Reads metadata.csv and writes split.csv in data_dir. Run it once, after downloading the images:
-        python -c "from deep_learning_project_waerniers_lamy.vision.utils import make_split; make_split()"
+        python -c "from deep_learning_project_waerniers_lamy_mahieddine.vision.utils import make_split; make_split()"
     """
     meta = pd.read_csv(data_dir / "metadata.csv")
     genres = sorted(meta["label"].unique())
