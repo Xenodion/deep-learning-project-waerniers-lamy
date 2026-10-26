@@ -138,13 +138,15 @@ def evaluate(model, X, y, batch_size=256):
 
 
 def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0, verbose=True,
-        clip_grad_norm=None, monitor=False, optimizer="adam", momentum=0.0):
+        clip_grad_norm=None, monitor=False, optimizer="adam", momentum=0.0, keep_best=True):
     """Train the model on data["X_train"] and keep the weights of the epoch with the best validation accuracy.
 
     Only train and validation are used. The model is left with its best weights.
     Returns a dict: history (the curves), best_epoch (counted from 1), best_val_acc, best_weights, seconds.
 
     optimizer: "adam" (the default of every run) or "sgd" (plain gradient descent, with momentum if momentum > 0).
+    keep_best: if False, the model keeps the weights of the last epoch (P18: when X_val is a test fold, the epoch must not be
+        chosen on it); best_epoch and best_val_acc are then those of the last epoch.
     clip_grad_norm: if set, the gradient of all the weights together is scaled down to this norm before each step.
     monitor: also record, at every epoch, what the training doctor looks at (P12). It does not change the training:
         history gets batch_loss (the loss of every batch), and per layer (see monitored_layers) grad_norm, update_ratio,
@@ -213,7 +215,10 @@ def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0
             print(f"epoch {epoch:3d} | train loss {train_loss:.3f} acc {train_acc:.3f} | "
                   f"val loss {val_loss:.3f} acc {val_acc:.3f}")
 
-    model.load_state_dict(best_weights)
+    if keep_best:
+        model.load_state_dict(best_weights)
+    else:
+        best_epoch, best_val_acc, best_weights = epochs, history["val_acc"][-1], copy.deepcopy(model.state_dict())
     return {"history": history, "best_epoch": best_epoch, "best_val_acc": best_val_acc,
             "best_weights": best_weights, "seconds": time.time() - start}
 
@@ -878,3 +883,22 @@ def perturb(image, kind, level, rng):
         canvas.paste(small, ((w - small.width) // 2, (h - small.height) // 2))
         return canvas
     raise ValueError(f"unknown perturbation {kind!r}")
+
+
+def quantize_int8(model, calibration_images):
+    """Post-training static int8 quantization of a whole-image model (PyTorch FX), as in P16: the activations' ranges are
+    measured on calibration_images (PIL), fbgemm on x86 processors, qnnpack on ARM ones. Returns a new model."""
+    import warnings
+    from torch.ao.quantization import get_default_qconfig_mapping
+    from torch.ao.quantization.quantize_fx import convert_fx, prepare_fx
+
+    engine = "fbgemm" if "fbgemm" in torch.backends.quantized.supported_engines else "qnnpack"
+    torch.backends.quantized.engine = engine
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # torch.ao.quantization announces its move to the torchao package
+        prepared = prepare_fx(copy.deepcopy(model).eval(), get_default_qconfig_mapping(engine),
+                              example_inputs=(to_tensor(calibration_images[:1]),))
+        with torch.no_grad():
+            for i in range(0, len(calibration_images), 50):
+                prepared(to_tensor(calibration_images[i:i + 50]))
+        return convert_fx(prepared)
