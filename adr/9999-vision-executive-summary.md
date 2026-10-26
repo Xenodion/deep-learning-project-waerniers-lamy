@@ -23,6 +23,7 @@ are validation accuracy (480 images, about +/- 3.6 points) unless stated; "test"
 | 9 | **Classical baseline** (P11, ADR 0014) | Colour histograms and HOG edges, then a random forest (best of 5 models on validation: 60.0%). Test 58.5%, 43 ms and 22 MB per photo. | Above the dense network (41.8%), 5 points under the small CNN, 27.5 under the fine-tuned ResNet. A neural network is worth it, but the gain comes from pretraining, not from being a network. |
 | 10 | **Final model** (P06 with 3 seeds, ADR 0012) | Training the last block: 83.3% in all 3 seeds against 80.3% frozen (+3.0), at the same prediction cost. | **Fine-tuned ResNet-18, 224 px. Test 86.0%.** `run_final.py` reproduces it. |
 | 11 | **Error analysis** (P10) | See below. | We stop here. |
+| 12 | **Training doctor** (P12, ADR 0015) | Gradients, update ratios and dead units monitored while the dense network is made to fail on purpose: learning rate, raw pixels (95 to 100% dead ReLUs), deep sigmoids (first-layer gradient 1e-4 of the last), initialisation (only He trains 10 ReLU layers), clipping. The P02 baseline is healthy inside, yet learns shuffled labels by heart (100% train, 19% validation). | Its overfitting is memorisation, not a bug: treat it by regularisation. |
 
 ## Why 86% is close to the ceiling, and why we stopped
 

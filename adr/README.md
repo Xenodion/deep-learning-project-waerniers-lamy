@@ -19,6 +19,7 @@ Short notes on **why** we made each significant choice, so we can defend it at t
 | [0012](0012-final-model.md) | The final model: ResNet-18 pretrained on ImageNet, last block fine-tuned, 224 px | Accepted |
 | [0013](0013-nlp-evaluation-protocol.md) | Evaluate the NLP ladder with blind, pooled, graded judgments | Accepted |
 | [0014](0014-classical-baseline.md) | A classical baseline (handcrafted features, random forest) to answer "is a neural network worth it?" | Accepted, amends 0004 |
+| [0015](0015-training-doctor.md) | Diagnose training from inside the network (P12), and keep the P02 baseline as is | Accepted |
 
 The whole vision work in one page, in order: [9999-vision-executive-summary.md](9999-vision-executive-summary.md).
 The whole NLP work in one page: [9998-nlp-executive-summary.md](9998-nlp-executive-summary.md).
