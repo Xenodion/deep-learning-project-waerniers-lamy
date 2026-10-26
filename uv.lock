@@ -482,7 +482,7 @@ wheels = [
 ]
 
 [[package]]
-name = "deep-learning-project-waerniers-lamy"
+name = "deep-learning-project-waerniers-lamy-mahieddine"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

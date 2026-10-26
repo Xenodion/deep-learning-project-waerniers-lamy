@@ -5,7 +5,7 @@ photo. The final model, a ResNet-18 pretrained on ImageNet with its last block f
 by artists it never saw, and takes about 70 ms per photo on one CPU thread. This summary covers the vision part only: the natural-language part of the guide is a separate experimental ladder (ADR 0005).
 
 Every step below is justified in an ADR (the numbered files of this folder) and measured in a notebook
-(`../src/deep_learning_project_waerniers_lamy/vision/`). Scores
+(`../src/deep_learning_project_waerniers_lamy_mahieddine/vision/`). Scores
 are validation accuracy (480 images, about +/- 3.6 points) unless stated; "test" is museum B (600 images, about +/- 2.9 points).
 
 ## What we did, in order
@@ -23,6 +23,9 @@ are validation accuracy (480 images, about +/- 3.6 points) unless stated; "test"
 | 9 | **Classical baseline** (P11, ADR 0014) | Colour histograms and HOG edges, then a random forest (best of 5 models on validation: 60.0%). Test 58.5%, 43 ms and 22 MB per photo. | Above the dense network (41.8%), 5 points under the small CNN, 27.5 under the fine-tuned ResNet. A neural network is worth it, but the gain comes from pretraining, not from being a network. |
 | 10 | **Final model** (P06 with 3 seeds, ADR 0012) | Training the last block: 83.3% in all 3 seeds against 80.3% frozen (+3.0), at the same prediction cost. | **Fine-tuned ResNet-18, 224 px. Test 86.0%.** `run_final.py` reproduces it. |
 | 11 | **Error analysis** (P10) | See below. | We stop here. |
+| 12 | **Training doctor** (P12, ADR 0015) | Gradients, update ratios and dead units monitored while the dense network is made to fail on purpose: learning rate, raw pixels (95 to 100% dead ReLUs), deep sigmoids (first-layer gradient 1e-4 of the last), initialisation (only He trains 10 ReLU layers), clipping. The P02 baseline is healthy inside, yet learns shuffled labels by heart (100% train, 19% validation). | Its overfitting is memorisation, not a bug: treat it by regularisation. |
+| 13 | **Curing the dense network** (P13, ADR 0016) | Eleven single changes, 5 seeds each. Weight decay, dropout, image size, depth, learning rate: all within 1.3 points of 39.0%, even when weight decay cuts the train / validation gap from 60 to 23 points. Only mirrored training copies count: 42.5%, but 41.0% on museum B (P02: 41.8%). | Final feed-forward network `dense_flip`. Overfitting was the symptom; the limit is the dense architecture. |
+| 14 | **Feed-forward on good features** (P14, ADR 0017) | On the forest's handcrafted features a feed-forward network ties with it (60.5% against 60.7% on validation; 62.7% against 58.5% on museum B, inside the noise). On the frozen ResNet features a hidden-layer head adds 0.5 points. | The features decide, not the kind of model. |
 
 ## Why 86% is close to the ceiling, and why we stopped
 

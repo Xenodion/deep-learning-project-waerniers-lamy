@@ -1,5 +1,5 @@
 [project]
-name = "deep-learning-project-waerniers-lamy"
+name = "deep-learning-project-waerniers-lamy-mahieddine"
 version = "0.1.0"
 description = "Museum guide: genre recognition (fine-tuned ResNet-18) and natural-language collection search (SigLIP)"
 readme = "README.md"
@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.scripts]
-deep-learning-project-waerniers-lamy = "deep_learning_project_waerniers_lamy:main"
+deep-learning-project-waerniers-lamy-mahieddine = "deep_learning_project_waerniers_lamy_mahieddine:main"
 
 [build-system]
 requires = ["uv_build>=0.12.23,<0.13.0"]

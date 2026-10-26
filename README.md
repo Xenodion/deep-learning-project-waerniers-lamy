@@ -72,8 +72,8 @@ uv sync
 The 3,000-image subset (~2.3 GB) and deterministic split (Museum A train/val vs Museum B test with unseen artists) are built via:
 
 ```bash
-uv run --with "datasets>=3.0" python src/deep_learning_project_waerniers_lamy/vision/make_wikiart_subset.py --label genre --classes portrait landscape cityscape still_life religious_painting --per-class 600 --size 224 --out data/wikiart_genre5
-uv run python -c "from deep_learning_project_waerniers_lamy.vision.utils import make_split; make_split()"
+uv run --with "datasets>=3.0" python src/deep_learning_project_waerniers_lamy_mahieddine/vision/make_wikiart_subset.py --label genre --classes portrait landscape cityscape still_life religious_painting --per-class 600 --size 224 --out data/wikiart_genre5
+uv run python -c "from deep_learning_project_waerniers_lamy_mahieddine.vision.utils import make_split; make_split()"
 ```
 
 ### 3. Reproduce Vision Final Score (Museum B Test)
@@ -81,7 +81,7 @@ uv run python -c "from deep_learning_project_waerniers_lamy.vision.utils import 
 Evaluates the saved production checkpoint (`results/final_model.pt`) on the 600 unseen test paintings of Museum B:
 
 ```bash
-uv run python src/deep_learning_project_waerniers_lamy/vision/run_final.py
+uv run python src/deep_learning_project_waerniers_lamy_mahieddine/vision/run_final.py
 ```
 *(Add `--train` to retrain the model from scratch in ~15 minutes).*
 
@@ -100,8 +100,8 @@ uv run python src/deep_learning_project_waerniers_lamy/vision/run_final.py
 │   ├── 9999-vision-executive-summary.md  # 1-page summary of the Computer Vision research
 │   └── 9998-nlp-executive-summary.md     # 1-page summary of the Multimodal NLP research
 ├── results/                 # Metrics, benchmark logs, and production weights (final_model.pt)
-├── src/deep_learning_project_waerniers_lamy/
-│   ├── vision/              # Vision pipeline: dense baseline (P02) to ResNet-18 (P06-P10), classical baseline (P11)
+├── src/deep_learning_project_waerniers_lamy_mahieddine/
+│   ├── vision/              # Vision pipeline: dense baseline (P02) to ResNet-18 (P06-P10), classical baseline (P11), training doctor (P12), dense regularisation (P13), feed-forward heads (P14)
 │   └── nlp/                 # NLP pipeline: recommendation ladder from metadata (N01) to SigLIP (N03-N05)
 └── scripts/                 # build_app.py: packages Museum B and the models into app/ (the demo bundle, not committed)
 ```
