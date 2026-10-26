@@ -101,7 +101,7 @@ uv run python src/deep_learning_project_waerniers_lamy_mahieddine/vision/run_fin
 │   └── 9998-nlp-executive-summary.md     # 1-page summary of the Multimodal NLP research
 ├── results/                 # Metrics, benchmark logs, and production weights (final_model.pt)
 ├── src/deep_learning_project_waerniers_lamy_mahieddine/
-│   ├── vision/              # Vision pipeline: dense baseline (P02) to ResNet-18 (P06-P10), classical baseline (P11), training doctor (P12)
+│   ├── vision/              # Vision pipeline: dense baseline (P02) to ResNet-18 (P06-P10), classical baseline (P11), training doctor (P12), dense regularisation (P13)
 │   └── nlp/                 # NLP pipeline: recommendation ladder from metadata (N01) to SigLIP (N03-N05)
 └── scripts/                 # build_app.py: packages Museum B and the models into app/ (the demo bundle, not committed)
 ```
