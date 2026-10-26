@@ -1,0 +1,25 @@
+{
+ "temperature": 1.227,
+ "threshold": 0.86,
+ "target_accuracy_answered": 0.95,
+ "validation": {
+  "ece_before": 0.0608,
+  "ece_after_crossfitted": 0.0678,
+  "answered alone": 0.6,
+  "accuracy answered alone": 0.9514,
+  "top-2 accuracy of the others": 0.8958,
+  "right genre shown (1 or 2 genres)": 0.9292,
+  "accuracy (all)": 0.8333
+ },
+ "museum_b": {
+  "accuracy": 0.86,
+  "ECE before": 0.0595,
+  "ECE after": 0.0443,
+  "loss before": 0.4234,
+  "loss after": 0.4089,
+  "answered alone": 0.6867,
+  "accuracy answered alone": 0.9417,
+  "top-2 accuracy of the others": 0.9415,
+  "right genre shown (1 or 2 genres)": 0.9417
+ }
+}
