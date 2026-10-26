@@ -526,12 +526,16 @@ IMAGENET_STD = [0.229, 0.224, 0.225]
 
 # Size of the vector that the frozen part gives for one image: the last block alone, or the three last blocks together ("multi").
 FEATURE_SIZE = {("resnet18", "last"): 512, ("resnet18", "multi"): 128 + 256 + 512,
-                ("resnet50", "last"): 2048, ("resnet50", "multi"): 512 + 1024 + 2048}
+                ("resnet50", "last"): 2048, ("resnet50", "multi"): 512 + 1024 + 2048,
+                ("mobilenet_v3_large", "last"): 960, ("mobilenet_v3_small", "last"): 576}  # P16: networks made for phones
 
 
 def pretrained_resnet(arch="resnet18"):
-    """A ResNet with the ImageNet weights (downloaded the first time), in evaluation mode: "resnet18" or "resnet50"."""
-    weights = {"resnet18": torchvision.models.ResNet18_Weights, "resnet50": torchvision.models.ResNet50_Weights}[arch]
+    """A pretrained network with the ImageNet weights (downloaded the first time), in evaluation mode: "resnet18" or
+    "resnet50", or, despite the name, "mobilenet_v3_large" / "mobilenet_v3_small" (P16)."""
+    weights = {"resnet18": torchvision.models.ResNet18_Weights, "resnet50": torchvision.models.ResNet50_Weights,
+               "mobilenet_v3_large": torchvision.models.MobileNet_V3_Large_Weights,
+               "mobilenet_v3_small": torchvision.models.MobileNet_V3_Small_Weights}[arch]
     return getattr(torchvision.models, arch)(weights=weights.IMAGENET1K_V1).eval()
 
 
@@ -545,25 +549,29 @@ def load_resnet_data(config, splits=("train", "val"), batch_size=64):
     and std; the sizes quoted above are for 224 px. The test split is only loaded if you ask for it, as in load_data (adr/0003).
 
     Optional keys of config (the defaults give the P06 behaviour):
-      model:     "resnet18" or "resnet50", the pretrained network;
+      model:     "resnet18" or "resnet50", the pretrained network (or "mobilenet_v3_large" / "_small", frozen whole, P16);
       features:  "last" (the last block) or "multi" (average-pooled outputs of the three last blocks, joined);
       augment:   number of augmented copies (random crop, mirror, colour) added for each TRAIN image, drawn with config["seed"];
       flip_eval: also give X_<split>_flip, the features of the mirrored validation / test images, for flip averaging.
     """
     table = pd.read_csv(DATA_DIR / "split.csv")
     size = config.get("image_size", 224)  # the files are 224 x 224; a smaller size shrinks them exactly as load_data does
-    resnet = pretrained_resnet(config.get("model", "resnet18"))
-    stem = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool, resnet.layer1)
-    if config.get("finetune", "head") == "layer4":
-        extract = nn.Sequential(stem, resnet.layer2, resnet.layer3).eval()  # layer4 is trained afterwards
-    elif config.get("features", "last") == "multi":
-        def extract(x):
-            x2 = resnet.layer2(stem(x))
-            x3 = resnet.layer3(x2)
-            x4 = resnet.layer4(x3)
-            return torch.cat([x2.mean(dim=(2, 3)), x3.mean(dim=(2, 3)), x4.mean(dim=(2, 3))], dim=1)
+    arch = config.get("model", "resnet18")
+    resnet = pretrained_resnet(arch)
+    if arch.startswith("mobilenet"):  # P16: the whole network up to its average pooling, frozen
+        extract = nn.Sequential(resnet.features, resnet.avgpool, nn.Flatten()).eval()
     else:
-        extract = nn.Sequential(stem, resnet.layer2, resnet.layer3, resnet.layer4, resnet.avgpool, nn.Flatten()).eval()
+        stem = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool, resnet.layer1)
+        if config.get("finetune", "head") == "layer4":
+            extract = nn.Sequential(stem, resnet.layer2, resnet.layer3).eval()  # layer4 is trained afterwards
+        elif config.get("features", "last") == "multi":
+            def extract(x):
+                x2 = resnet.layer2(stem(x))
+                x3 = resnet.layer3(x2)
+                x4 = resnet.layer4(x3)
+                return torch.cat([x2.mean(dim=(2, 3)), x3.mean(dim=(2, 3)), x4.mean(dim=(2, 3))], dim=1)
+        else:
+            extract = nn.Sequential(stem, resnet.layer2, resnet.layer3, resnet.layer4, resnet.avgpool, nn.Flatten()).eval()
     mean = torch.tensor(IMAGENET_MEAN).view(1, 3, 1, 1)
     std = torch.tensor(IMAGENET_STD).view(1, 3, 1, 1)
     augmentation = torchvision.transforms.Compose([
@@ -666,7 +674,7 @@ def score_on_test(stem):
     elif config["model"] == "cnn":
         model = build_cnn(config)
         data = to_images(load_data(size=size, splits=("test",)), size)
-    elif config["model"] in ("resnet18", "resnet50"):
+    elif config["model"] in ("resnet18", "resnet50", "mobilenet_v3_large", "mobilenet_v3_small"):
         model = build_resnet_head(config)
         data = load_resnet_data(config, splits=("test",))
     elif config["model"] == "mlp_features":
@@ -735,3 +743,138 @@ def build_feature_mlp(config, n_classes=5):
         return nn.Sequential(nn.Linear(config["n_features"], n_classes))
     return nn.Sequential(nn.Linear(config["n_features"], config["hidden"]), nn.ReLU(), nn.Dropout(config.get("dropout", 0.0)),
                          nn.Linear(config["hidden"], n_classes))
+
+
+# --------------------------------------------------------------------------------------------------
+# 9. The kiosk: the final model on any image, and its cost (P15, P16, P17)
+# --------------------------------------------------------------------------------------------------
+FINAL_RUN = "resnet18_layer4"  # adr/0012
+
+
+def final_model():
+    """The final model of adr/0012 as one network, from a standardised 224 px image to the 5 genre scores, in evaluation mode.
+
+    Layers 1 to 3 are the frozen ImageNet ResNet-18; layer4 and the final layer come from results/final_model.pt.
+    """
+    runs = summary()
+    config = load_result(runs[runs["name"] == FINAL_RUN].sort_values("date")["file"].iloc[0])["config"]
+    resnet = pretrained_resnet("resnet18")
+    head = build_resnet_head(config)
+    head.load_state_dict(torch.load(RESULTS_DIR / "final_model.pt"))
+    return nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool, resnet.layer1, resnet.layer2, resnet.layer3,
+                         *head).eval()
+
+
+def split_images(split):
+    """The images of one split as PIL images (224 x 224 RGB, as saved by the subset script) and their labels."""
+    table = pd.read_csv(DATA_DIR / "split.csv")
+    rows = table[table["split"] == split]
+    images = [Image.open(DATA_DIR / p).convert("RGB") for p in rows["path"]]
+    return images, torch.tensor(rows["label_idx"].to_numpy())
+
+
+def to_tensor(images, size=224):
+    """PIL images to one standardised batch, prepared exactly as load_resnet_data does (resize, 0-1, ImageNet mean and std)."""
+    batch = np.stack([np.asarray(im.convert("RGB").resize((size, size), Image.Resampling.BILINEAR)) for im in images])
+    x = torch.tensor(batch).permute(0, 3, 1, 2).float() / 255
+    return (x - torch.tensor(IMAGENET_MEAN).view(1, 3, 1, 1)) / torch.tensor(IMAGENET_STD).view(1, 3, 1, 1)
+
+
+def predict_logits(model, images, batch_size=50, size=224):
+    """The scores (logits) of a whole-image model for a list of PIL images, batch by batch."""
+    model.eval()
+    out = []
+    with torch.no_grad():
+        for i in range(0, len(images), batch_size):
+            out.append(model(to_tensor(images[i:i + batch_size], size)))
+    return torch.cat(out)
+
+
+def time_per_image(networks, threads, rounds=9, repeats=10):
+    """Time in ms to process one image, the protocol of P09: batch of 1, all the networks timed in `rounds` rounds in a
+    different random order each round, each measurement the median of `repeats` runs. networks: label -> (model, image size).
+    Returns one row per round and one column per network."""
+    previous = torch.get_num_threads()
+    torch.set_num_threads(threads)
+    inputs = {label: torch.randn(1, 3, size, size) for label, (net, size) in networks.items()}
+    measurements = {label: [] for label in networks}
+    rng = random.Random(0)
+    try:
+        with torch.no_grad():
+            for label, (net, size) in networks.items():  # warm-up, not counted
+                for _ in range(3):
+                    net(inputs[label])
+            labels = list(networks)
+            for _ in range(rounds):
+                rng.shuffle(labels)  # a slow drift of the computer hits every network alike
+                for label in labels:
+                    runs = []
+                    for _ in range(repeats):
+                        start = time.perf_counter()
+                        networks[label][0](inputs[label])
+                        runs.append(time.perf_counter() - start)
+                    measurements[label].append(1000 * float(np.median(runs)))
+    finally:
+        torch.set_num_threads(previous)
+    return pd.DataFrame(measurements)
+
+
+# What a visitor's phone does to a painting (P15). Three levels each, fixed before any result: mild, medium, strong.
+PERTURBATIONS = {
+    "blur": [1, 2, 4],  # Gaussian blur radius in pixels (a shaky hand, a missed focus)
+    "jpeg": [30, 15, 5],  # JPEG quality (a compressed upload)
+    "dark": [0.7, 0.5, 0.3],  # brightness factor (a dim gallery)
+    "noise": [10, 20, 40],  # std of the Gaussian sensor noise, in 0-255 units (low light)
+    "warm light": [0.1, 0.2, 0.35],  # colour cast of tungsten lamps: red up, blue down by this share
+    "glare": [0.3, 0.5, 0.7],  # strength of a white reflection spot at a random place (varnish under a spotlight)
+    "tilt": [0.1, 0.2, 0.3],  # perspective distortion (the visitor stands to one side)
+    "rotation": [5, 10, 20],  # degrees (the phone is not held straight)
+    "far": [0.8, 0.6, 0.4],  # share of the photo the painting fills, the rest a grey wall (the visitor stands back)
+}
+WALL = (128, 128, 128)  # the colour around a tilted, rotated or distant painting
+
+
+def perturb(image, kind, level, rng):
+    """One PIL image as a phone might capture it: `kind` from PERTURBATIONS at `level`; rng (numpy Generator) draws the
+    random parts (noise, position of the glare, side of the tilt and rotation), so a given seed gives the same photos."""
+    from PIL import ImageEnhance, ImageFilter
+    import io
+    import torchvision.transforms.functional as TF
+
+    if kind == "blur":
+        return image.filter(ImageFilter.GaussianBlur(level))
+    if kind == "jpeg":
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=level)
+        return Image.open(io.BytesIO(buffer.getvalue())).convert("RGB")
+    if kind == "dark":
+        return ImageEnhance.Brightness(image).enhance(level)
+    x = np.asarray(image).astype("float32")
+    if kind == "noise":
+        return Image.fromarray(np.clip(x + rng.normal(0, level, x.shape), 0, 255).astype("uint8"))
+    if kind == "warm light":
+        return Image.fromarray(np.clip(x * np.array([1 + level, 1.0, 1 - level]), 0, 255).astype("uint8"))
+    if kind == "glare":
+        h, w = x.shape[:2]
+        cy, cx = rng.uniform(0.2, 0.8) * h, rng.uniform(0.2, 0.8) * w
+        yy, xx = np.mgrid[:h, :w]
+        spot = level * np.exp(-(((yy - cy) / (0.2 * h)) ** 2 + ((xx - cx) / (0.3 * w)) ** 2))[..., None]
+        return Image.fromarray(np.clip(x * (1 - spot) + 255 * spot, 0, 255).astype("uint8"))
+    if kind == "tilt":
+        w, h = image.size
+        d = level * w / 2
+        corners = [[0, 0], [w, 0], [w, h], [0, h]]
+        if rng.random() < 0.5:  # the near side looks taller: seen from the left or from the right
+            moved = [[0, 0], [w, d], [w, h - d], [0, h]]
+        else:
+            moved = [[0, d], [w, 0], [w, h], [0, h - d]]
+        return TF.perspective(image, corners, moved, fill=WALL)
+    if kind == "rotation":
+        return TF.rotate(image, float(level * rng.choice([-1, 1])), fill=WALL)
+    if kind == "far":
+        w, h = image.size
+        small = image.resize((round(w * level), round(h * level)), Image.Resampling.BILINEAR)
+        canvas = Image.new("RGB", (w, h), WALL)
+        canvas.paste(small, ((w - small.width) // 2, (h - small.height) // 2))
+        return canvas
+    raise ValueError(f"unknown perturbation {kind!r}")
