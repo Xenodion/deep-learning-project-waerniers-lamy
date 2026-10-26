@@ -250,7 +250,8 @@ def activation_stats(activations, model, X, batch_size=256):
 
     For each layer, by name: act_std, the spread of its outputs (it collapses towards 0 when the signal dies out with depth);
     dead, the share of units (neurons, or channels for a convolution) that never give a positive output on any image of X:
-    a dead ReLU gives 0 and no gradient, so it never comes back; saturated, the share of outputs stuck at the flat ends of
+    a dead ReLU gives 0 and its own weights get no gradient, so it comes back only if the layers below change its inputs
+    (a leaky ReLU is never fully dead: it still passes 1% of the gradient); saturated, the share of outputs stuck at the flat ends of
     a sigmoid (below 0.02 or above 0.98) or a tanh (beyond +/- 0.96), where the gradient almost vanishes (NaN for ReLUs).
     """
     totals = {name: {"sum": 0.0, "sum_sq": 0.0, "count": 0, "saturated": 0, "alive": None} for name in activations}
