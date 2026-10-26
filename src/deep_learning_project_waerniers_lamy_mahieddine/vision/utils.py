@@ -138,12 +138,13 @@ def evaluate(model, X, y, batch_size=256):
 
 
 def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0, verbose=True,
-        clip_grad_norm=None, monitor=False):
+        clip_grad_norm=None, monitor=False, optimizer="adam", momentum=0.0):
     """Train the model on data["X_train"] and keep the weights of the epoch with the best validation accuracy.
 
     Only train and validation are used. The model is left with its best weights.
     Returns a dict: history (the curves), best_epoch (counted from 1), best_val_acc, best_weights, seconds.
 
+    optimizer: "adam" (the default of every run) or "sgd" (plain gradient descent, with momentum if momentum > 0).
     clip_grad_norm: if set, the gradient of all the weights together is scaled down to this norm before each step.
     monitor: also record, at every epoch, what the training doctor looks at (P12). It does not change the training:
         history gets batch_loss (the loss of every batch), and per layer (see monitored_layers) grad_norm, update_ratio,
@@ -151,7 +152,12 @@ def fit(model, data, epochs=30, lr=1e-3, batch_size=64, weight_decay=0.0, seed=0
     """
     torch.manual_seed(seed)  # fixes the shuffling; seed the model creation yourself before building it
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    if optimizer == "adam":
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    elif optimizer == "sgd":
+        optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+    else:
+        raise ValueError(f"unknown optimizer {optimizer!r}: use 'adam' or 'sgd'")
     X_train, y_train = data["X_train"], data["y_train"]
 
     history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
@@ -412,6 +418,35 @@ def build_cnn(config, n_classes=5):
         in_channels = out_channels
     layers += [nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Dropout(config.get("dropout", 0.0)),
                nn.Linear(in_channels, n_classes)]
+    return nn.Sequential(*layers)
+
+
+def build_mlp(config, n_classes=5):
+    """A dense network of any depth, for the training doctor (P12).
+
+    Needs: image_size, hidden (one width per hidden layer, for example [128] * 6).
+    Optional: activation ("relu", "leaky_relu", "sigmoid" or "tanh"; "relu"), init ("default", PyTorch's own; "he",
+    Kaiming normal, made for ReLUs; or a number, the std of a normal distribution), dropout (0.0, after each activation).
+    The biases start at 0 unless init is "default".
+    """
+    activation = {"relu": nn.ReLU, "leaky_relu": nn.LeakyReLU, "sigmoid": nn.Sigmoid, "tanh": nn.Tanh}[config.get("activation", "relu")]
+    sizes = [3 * config["image_size"] ** 2] + list(config["hidden"])
+    layers = []
+    for n_in, n_out in zip(sizes[:-1], sizes[1:]):
+        layers += [nn.Linear(n_in, n_out), activation()]
+        if config.get("dropout", 0.0) > 0:
+            layers.append(nn.Dropout(config["dropout"]))
+    layers.append(nn.Linear(sizes[-1], n_classes))
+
+    init = config.get("init", "default")
+    if init != "default":
+        for layer in layers:
+            if isinstance(layer, nn.Linear):
+                if init == "he":
+                    nn.init.kaiming_normal_(layer.weight, nonlinearity="relu")
+                else:
+                    nn.init.normal_(layer.weight, std=float(init))
+                nn.init.zeros_(layer.bias)
     return nn.Sequential(*layers)
 
 
