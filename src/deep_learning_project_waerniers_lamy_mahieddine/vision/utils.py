@@ -636,9 +636,13 @@ def evaluate_with_flip(model, X, X_flip, y, batch_size=256):
 # 7. Scoring any saved run on the test set
 # --------------------------------------------------------------------------------------------------
 def build_dense(config, n_classes=5):
-    """The dense baseline of P02: one hidden layer, described by image_size and hidden."""
-    n_inputs = 3 * config["image_size"] ** 2
-    return nn.Sequential(nn.Linear(n_inputs, config["hidden"]), nn.ReLU(), nn.Linear(config["hidden"], n_classes))
+    """The dense baseline of P02: one hidden layer, described by image_size and hidden.
+
+    The regularised variants of P13 also use it: hidden can be a list (one width per hidden layer) and config can have a
+    dropout. With an int hidden and no dropout it builds exactly the P02 network (same layers, same starting weights).
+    """
+    hidden = config["hidden"] if isinstance(config["hidden"], list) else [int(config["hidden"])]
+    return build_mlp({"image_size": config["image_size"], "hidden": hidden, "dropout": config.get("dropout", 0.0)}, n_classes)
 
 
 def score_on_test(stem):
