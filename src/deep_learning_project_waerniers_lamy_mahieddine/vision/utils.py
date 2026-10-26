@@ -610,11 +610,17 @@ def load_resnet_data(config, splits=("train", "val"), batch_size=64):
 def build_resnet_head(config, n_classes=5):
     """The trainable part: a new final layer, preceded by the pretrained last block if finetune is "layer4".
 
-    Optional in config: finetune ("head" or "layer4"), dropout (0.0), and model / features as in load_resnet_data.
+    Optional in config: finetune ("head" or "layer4"), dropout (0.0), head_hidden (0: a single linear layer; n: a hidden layer of
+    n ReLUs before it, P14), and model / features as in load_resnet_data.
     Its "weights" are only the trainable ones.
     """
     arch = config.get("model", "resnet18")
-    head = [nn.Dropout(config.get("dropout", 0.0)), nn.Linear(FEATURE_SIZE[(arch, config.get("features", "last"))], n_classes)]
+    n_features = FEATURE_SIZE[(arch, config.get("features", "last"))]
+    if config.get("head_hidden"):  # P14: a small feed-forward head (one hidden ReLU layer) instead of a single linear layer
+        head = [nn.Linear(n_features, config["head_hidden"]), nn.ReLU(), nn.Dropout(config.get("dropout", 0.0)),
+                nn.Linear(config["head_hidden"], n_classes)]
+    else:
+        head = [nn.Dropout(config.get("dropout", 0.0)), nn.Linear(n_features, n_classes)]
     if config.get("finetune", "head") == "layer4":
         layer4 = copy.deepcopy(pretrained_resnet(arch).layer4)
         return nn.Sequential(layer4, nn.AdaptiveAvgPool2d(1), nn.Flatten(), *head)
@@ -663,6 +669,69 @@ def score_on_test(stem):
     elif config["model"] in ("resnet18", "resnet50"):
         model = build_resnet_head(config)
         data = load_resnet_data(config, splits=("test",))
+    elif config["model"] == "mlp_features":
+        model = build_feature_mlp(config)
+        data = load_handcrafted(config, splits=("test",))
     else:
         raise ValueError(f"do not know how to rebuild a model of type {config['model']!r}")
     return add_test_score(stem, model, data)
+
+
+# --------------------------------------------------------------------------------------------------
+# 8. Feed-forward networks on the handcrafted features of the classical baseline (P11, P14)
+# --------------------------------------------------------------------------------------------------
+HANDCRAFTED = {"feature_size": 128, "hsv_bins": (16, 8, 8), "hog_cell": 16}  # the P11 settings (ADR 0014), fixed in advance
+
+
+def handcrafted_features(image):
+    """The 1,802 handcrafted numbers of P11 for one RGB image (uint8, height x width x 3): colour first, then edges.
+
+    The same computation as the notebook P11: hue / saturation / value histograms (16, 8, 8 bins) with the mean and std of
+    each channel, then HOG (9 orientations, 16 px cells, 2 x 2 blocks) on a 128 px grayscale copy.
+    """
+    from skimage.color import rgb2gray, rgb2hsv  # scikit-image is only needed here
+    from skimage.feature import hog
+
+    size = HANDCRAFTED["feature_size"]
+    small = np.asarray(Image.fromarray(image).resize((size, size), Image.Resampling.BILINEAR))
+    hsv = rgb2hsv(small)
+    histograms = [np.histogram(hsv[..., k], bins=bins, range=(0, 1))[0] / hsv[..., k].size
+                  for k, bins in enumerate(HANDCRAFTED["hsv_bins"])]
+    moments = np.concatenate([hsv.mean(axis=(0, 1)), hsv.std(axis=(0, 1))])
+    cell = HANDCRAFTED["hog_cell"]
+    edges = hog(rgb2gray(small), orientations=9, pixels_per_cell=(cell, cell), cells_per_block=(2, 2))
+    return np.concatenate([*histograms, moments, edges]).astype("float32")
+
+
+def load_handcrafted(config=None, splits=("train", "val")):
+    """Return a dict like load_data, with X_<split> = the 1,802 handcrafted numbers, standardised with the train statistics.
+
+    The features of all the images are computed once (about a minute) and kept in data/wikiart_genre5/handcrafted.npz
+    (ignored by Git). The test split is only returned if you ask for it, as in load_data (adr/0003). config is not used: it
+    is there so that this function can be the load_fn of run_experiment.
+    """
+    table = pd.read_csv(DATA_DIR / "split.csv")
+    cache = DATA_DIR / "handcrafted.npz"
+    if not cache.exists():
+        features = [handcrafted_features(np.asarray(Image.open(DATA_DIR / p).convert("RGB"))) for p in table["path"]]
+        np.savez(cache, ids=table["id"].to_numpy().astype(str), X=np.stack(features))
+    saved = np.load(cache)
+    if not np.array_equal(saved["ids"], table["id"].to_numpy().astype(str)):
+        raise RuntimeError(f"{cache} does not match split.csv: delete it to compute the features again")
+
+    train = saved["X"][(table["split"] == "train").to_numpy()]
+    mean, std = train.mean(axis=0), train.std(axis=0) + 1e-8  # some HOG cells are almost constant
+    data = {"classes": sorted(table["label"].unique())}
+    for name in splits:
+        rows = (table["split"] == name).to_numpy()
+        data["X_" + name] = torch.tensor((saved["X"][rows] - mean) / std, dtype=torch.float32)
+        data["y_" + name] = torch.tensor(table.loc[rows, "label_idx"].to_numpy())
+    return data
+
+
+def build_feature_mlp(config, n_classes=5):
+    """A feed-forward network on the handcrafted features: n_features inputs, hidden ReLUs (0: none, a linear model), dropout."""
+    if not config.get("hidden"):
+        return nn.Sequential(nn.Linear(config["n_features"], n_classes))
+    return nn.Sequential(nn.Linear(config["n_features"], config["hidden"]), nn.ReLU(), nn.Dropout(config.get("dropout", 0.0)),
+                         nn.Linear(config["hidden"], n_classes))
