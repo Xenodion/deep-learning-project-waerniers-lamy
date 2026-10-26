@@ -25,6 +25,7 @@ are validation accuracy (480 images, about +/- 3.6 points) unless stated; "test"
 | 11 | **Error analysis** (P10) | See below. | We stop here. |
 | 12 | **Training doctor** (P12, ADR 0015) | Gradients, update ratios and dead units monitored while the dense network is made to fail on purpose: learning rate, raw pixels (95 to 100% dead ReLUs), deep sigmoids (first-layer gradient 1e-4 of the last), initialisation (only He trains 10 ReLU layers), clipping. The P02 baseline is healthy inside, yet learns shuffled labels by heart (100% train, 19% validation). | Its overfitting is memorisation, not a bug: treat it by regularisation. |
 | 13 | **Curing the dense network** (P13, ADR 0016) | Eleven single changes, 5 seeds each. Weight decay, dropout, image size, depth, learning rate: all within 1.3 points of 39.0%, even when weight decay cuts the train / validation gap from 60 to 23 points. Only mirrored training copies count: 42.5%, but 41.0% on museum B (P02: 41.8%). | Final feed-forward network `dense_flip`. Overfitting was the symptom; the limit is the dense architecture. |
+| 14 | **Feed-forward on good features** (P14, ADR 0017) | On the forest's handcrafted features a feed-forward network ties with it (60.5% against 60.7% on validation; 62.7% against 58.5% on museum B, inside the noise). On the frozen ResNet features a hidden-layer head adds 0.5 points. | The features decide, not the kind of model. |
 
 ## Why 86% is close to the ceiling, and why we stopped
 
