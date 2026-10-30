@@ -22,6 +22,11 @@ Short notes on **why** we made each significant choice, so we can defend it at t
 | [0015](0015-training-doctor.md) | Diagnose training from inside the network (P12), and keep the P02 baseline as is | Accepted |
 | [0016](0016-dense-regularisation.md) | The final feed-forward network: the P02 network with mirrored training copies (P13) | Accepted |
 | [0017](0017-feedforward-on-features.md) | At equal inputs a feed-forward network ties with the forest: the features decide (P14) | Accepted |
+| [0018](0018-phone-photo-robustness.md) | The final model resists light and angle, not loss of detail: the app must check the photo (P15) | Accepted |
+| [0019](0019-kiosk-int8.md) | On the kiosk, run the final model quantized to int8 (P16) | Accepted, complements 0012 |
+| [0020](0020-confidence-and-abstention.md) | Show two genres when the confidence is below 0.86 (P17) | Accepted |
+| [0021](0021-evaluation-rigour.md) | Museum B is not easier, the artist shortcut is small, only the network-against-forest gap is certain (P18) | Accepted |
+| [0022](0022-gradcam.md) | The final model looks at the subject, not at shortcuts (P19, Grad-CAM) | Accepted |
 
 The whole vision work in one page, in order: [9999-vision-executive-summary.md](9999-vision-executive-summary.md).
 The whole NLP work in one page: [9998-nlp-executive-summary.md](9998-nlp-executive-summary.md).

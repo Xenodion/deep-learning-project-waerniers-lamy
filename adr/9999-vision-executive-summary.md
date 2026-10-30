@@ -26,6 +26,11 @@ are validation accuracy (480 images, about +/- 3.6 points) unless stated; "test"
 | 12 | **Training doctor** (P12, ADR 0015) | Gradients, update ratios and dead units monitored while the dense network is made to fail on purpose: learning rate, raw pixels (95 to 100% dead ReLUs), deep sigmoids (first-layer gradient 1e-4 of the last), initialisation (only He trains 10 ReLU layers), clipping. The P02 baseline is healthy inside, yet learns shuffled labels by heart (100% train, 19% validation). | Its overfitting is memorisation, not a bug: treat it by regularisation. |
 | 13 | **Curing the dense network** (P13, ADR 0016) | Eleven single changes, 5 seeds each. Weight decay, dropout, image size, depth, learning rate: all within 1.3 points of 39.0%, even when weight decay cuts the train / validation gap from 60 to 23 points. Only mirrored training copies count: 42.5%, but 41.0% on museum B (P02: 41.8%). | Final feed-forward network `dense_flip`. Overfitting was the symptom; the limit is the dense architecture. |
 | 14 | **Feed-forward on good features** (P14, ADR 0017) | On the forest's handcrafted features a feed-forward network ties with it (60.5% against 60.7% on validation; 62.7% against 58.5% on museum B, inside the noise). On the frozen ResNet features a hidden-layer head adds 0.5 points. | The features decide, not the kind of model. |
+| 15 | **Phone photos** (P15, ADR 0018) | Nine perturbations, three levels. Light and angle cost at most 4.6 points; blur, heavy JPEG, noise, rotation and distance cost 17 to 36 points at the strong level, the same on museum B. | The app must frame the painting and reject blurred or over-compressed photos. |
+| 16 | **Kiosk cost** (P16, ADR 0019) | int8 quantization: same accuracy (83.3% validation, 86.2% museum B), 4 times smaller, 26% faster on one thread. MobileNetV3-Large frozen: 82.9% / 84.8%, but slower on this CPU. | Run the final model in int8 on the kiosk. |
+| 17 | **Confidence** (P17, ADR 0020) | Slightly over-confident (T = 1.23). One genre above a confidence of 0.86, two below: the right genre is shown for 94.2% of museum B's paintings instead of 86.0%. | Show two genres when unsure. |
+| 18 | **How much to trust museum B** (P18, ADR 0021) | Validation's named artists score like museum B; seeing the painter in training is worth 1.5 points (frozen ResNet) to 3.4 (forest); unseen-artist accuracy varies by about 5 points between draws. Paired tests: only final model against forest is real (+27.8); fine-tuning +1.5 is not significant on museum B. | Museum B is not easier; only the big step of the ladder is certain. |
+| 19 | **Where the model looks** (P19, ADR 0022) | Grad-CAM: the horizon band for landscapes and cityscapes, faces for portraits and religious paintings, the centre for still lifes; edges weigh less than their surface; the maps are faithful (hiding their top cells: 64.2%, random: 72.5%). | No shortcut; the confident mistakes are ambiguous subjects. |
 
 ## Why 86% is close to the ceiling, and why we stopped
 
@@ -49,7 +54,9 @@ cost about twice as much to run for one or two points, so **we do not expect to 
 
 - This is our reading of the evidence, not a proven ceiling. We did not look at the paintings one by one to check the labels, we only
   tested ResNet-50 frozen (never fine-tuned), and we did not add training images.
-- Every model scored higher on museum B than on validation, so museum B looks easier (named artists only): do not expect 86% in a real
+- Every model scored higher on museum B than on validation. P18 (ADR 0021) explains it: on named artists, validation and
+  museum B agree within 2 points; validation is harder because two thirds of it is "Unknown Artist". Museum B's choice of
+  44 artists still moves its score by about +/- 5 points, and real photos cost more (ADR 0018): do not expect 86% in a real
   second museum.
 - The classical baseline (ADR 0014) uses one feature set fixed in advance and a forest tuned only on its size: a reference, not a competitor we tried to beat.
 - Timings come from one laptop; the ratios between models matter more than the milliseconds.
