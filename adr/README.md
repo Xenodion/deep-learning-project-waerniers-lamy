@@ -27,6 +27,7 @@ Short notes on **why** we made each significant choice, so we can defend it at t
 | [0020](0020-confidence-and-abstention.md) | Show two genres when the confidence is below 0.86 (P17) | Accepted |
 | [0021](0021-evaluation-rigour.md) | Museum B is not easier, the artist shortcut is small, only the network-against-forest gap is certain (P18) | Accepted |
 | [0022](0022-gradcam.md) | The final model looks at the subject, not at shortcuts (P19, Grad-CAM) | Accepted |
+| [0023](0023-image-search.md) | The visitor can search the collection with a picture, and the app takes uploads again, within limits | Accepted |
 
 The whole vision work in one page, in order: [9999-vision-executive-summary.md](9999-vision-executive-summary.md).
 The whole NLP work in one page: [9998-nlp-executive-summary.md](9998-nlp-executive-summary.md).

@@ -41,12 +41,12 @@ The guide delivers two core capabilities built with PyTorch primitives:
 ## 🚀 Live Interactive Demo
 
 Both production models in a museum interface: click one of the 600 Museum B paintings (artists the model never saw) to
-get its genre, or describe a painting in plain words to search the collection. The *Info* tab holds the brief, the
-results and the cost.
+get its genre, or describe a painting in plain words (or show a picture) to search the collection. The *Info* tab holds
+the brief, the results and the cost.
 
 - **Online demo:** <https://museum-guide-643636450457.europe-west1.run.app>
-  (Google Cloud Run, scales to zero: the first visit after a quiet period takes about 40 seconds to wake up). It takes no
-  upload and caps the load; how it is built, limited and deployed is in [`deploy/README.md`](deploy/README.md).
+  (Google Cloud Run, scales to zero: the first visit after a quiet period takes about 40 seconds to wake up). It takes only
+  pictures of 10 MB at most and caps the load; how it is built, limited and deployed is in [`deploy/README.md`](deploy/README.md).
 - **Local demo** (needs `data/`, see below; the first command builds `app/` from Museum B and checks that the bundled
   model reproduces the 86.0%):
   ```powershell
