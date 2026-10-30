@@ -38,3 +38,5 @@ date,name,model,image_size,hidden,epochs,lr,batch_size,weight_decay,seed,conv_ch
 2026-10-26 18:45:38,resnet18_head_rerun,resnet18,224,,30,0.001,64,0.0,0,,,,0.0,head,,,,,,,2565,20,0.8021,0.8033,0.0046,,,,0,resnet18_head_rerun_2026-10-26_18-45-38
 2026-10-26 18:45:40,resnet18_mlp_head,resnet18,224,,30,0.001,64,0.0,0,,,,0.0,head,,,,,,256.0,132613,23,0.7958,0.8029,0.0046,,,,1,resnet18_mlp_head_2026-10-26_18-45-40
 2026-10-26 18:45:42,resnet18_mlp_head_drop,resnet18,224,,30,0.001,64,0.0,0,,,,0.5,head,,,,,,256.0,132613,14,0.8063,0.8079,0.0034,,,,0,resnet18_mlp_head_drop_2026-10-26_18-45-42
+2026-10-26 19:12:19,mobilenet_v3_large_head,mobilenet_v3_large,224,,30,0.001,64,0.0,0,,,,0.0,head,,,,,,,4805,30,0.8271,0.8292,0.0021,0.8483,0.3897,2026-10-26 19:14:26,0,mobilenet_v3_large_head_2026-10-26_19-12-19
+2026-10-26 19:13:14,mobilenet_v3_small_head,mobilenet_v3_small,224,,30,0.001,64,0.0,0,,,,0.0,head,,,,,,,2885,19,0.8042,0.8025,0.0017,,,,0,mobilenet_v3_small_head_2026-10-26_19-13-14

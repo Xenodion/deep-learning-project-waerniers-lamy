@@ -17,7 +17,7 @@
 <p align="center"><sub>Left: the genre of an unseen painting. Right: collection search in plain words. Live, no install; first visit after a quiet period takes about 40 s to wake up.</sub></p>
 
 > **Final Project — Deep Learning Course**  
-> **Authors:** Alexandre Waerniers & Vincent Lamy  
+> **Authors:** Alexandre Waerniers, Vincent Lamy & Yoni Mahieddine  
 > **Context:** A fictional mid-sized French fine-arts museum wants an intelligent guide for gallery kiosks and visitors' phones. Gallery kiosks run on modest CPUs, the team is small, and recurring API budgets are zero. Every design choice is backed by evidence and recorded in Architecture Decision Records ([ADR](adr/README.md)).
 
 ---
@@ -101,7 +101,7 @@ uv run python src/deep_learning_project_waerniers_lamy_mahieddine/vision/run_fin
 │   └── 9998-nlp-executive-summary.md     # 1-page summary of the Multimodal NLP research
 ├── results/                 # Metrics, benchmark logs, and production weights (final_model.pt)
 ├── src/deep_learning_project_waerniers_lamy_mahieddine/
-│   ├── vision/              # Vision pipeline: dense baseline (P02) to ResNet-18 (P06-P10), classical baseline (P11), training doctor (P12), dense regularisation (P13), feed-forward heads (P14)
+│   ├── vision/              # Vision pipeline: dense baseline (P02) to ResNet-18 (P06-P10), classical baseline (P11), training doctor (P12), dense regularisation (P13), feed-forward heads (P14), phone robustness, kiosk cost and confidence (P15-P17), evaluation rigour and Grad-CAM (P18-P19)
 │   └── nlp/                 # NLP pipeline: recommendation ladder from metadata (N01) to SigLIP (N03-N05)
 └── scripts/                 # build_app.py: packages Museum B and the models into app/ (the demo bundle, not committed)
 ```
@@ -111,6 +111,7 @@ uv run python src/deep_learning_project_waerniers_lamy_mahieddine/vision/run_fin
 ## 📖 Architecture Decision Records (ADR)
 
 Every experimental milestone is documented with hypothesis, results, and architectural verdict:
+- **Full Synthesis of Models & Metrics:** [MODELS_AND_EVALUATION_SYNTHESIS.md](MODELS_AND_EVALUATION_SYNTHESIS.md)
 - **Vision Executive Summary:** [`adr/9999-vision-executive-summary.md`](adr/9999-vision-executive-summary.md)
 - **NLP Executive Summary:** [`adr/9998-nlp-executive-summary.md`](adr/9998-nlp-executive-summary.md)
 - **Test Protocol & Museum B Split:** [`adr/0003-simulated-museum-b-test-set.md`](adr/0003-simulated-museum-b-test-set.md)

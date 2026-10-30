@@ -1,0 +1,7 @@
+A,B,question,A - B (points),95% low,95% high,only A right,only B right,McNemar p,"p, Holm (6 tests)",real at 5%
+final ResNet-18 (fine-tuned),ResNet-18 frozen,does fine-tuning the last block help on unseen artists?,1.5000000000000013,-0.6666666666666599,3.6666666666666625,26,17,0.2220528201560228,0.8882112806240912,False
+final ResNet-18 (fine-tuned),"final ResNet-18, int8",does int8 cost accuracy?,-0.16666666666667052,-1.0000000000000009,0.666666666666671,3,4,1.0,1.0,False
+final ResNet-18 (fine-tuned),MobileNetV3-Large frozen,is MobileNetV3-Large as good?,1.1666666666666603,-1.1666666666666603,3.500000000000003,29,22,0.4010619910279374,1.0,False
+final ResNet-18 (fine-tuned),random forest (P11),the director's question,27.833333333333332,23.666666666666668,32.00000000000001,187,20,3.612839209306161e-35,2.167703525583697e-34,True
+feed-forward on handcrafted features,random forest (P11),"network or forest, same inputs?",4.5000000000000036,0.6666666666666599,8.333333333333337,84,57,0.02819530892687741,0.14097654463438705,False
+"dense, mirrored copies (final dense)","dense baseline (P02, re-run)",do mirrored copies help on unseen artists?,0.16666666666666496,-3.666666666666668,4.1666666666666625,72,71,1.0,1.0,False
