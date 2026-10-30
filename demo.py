@@ -255,7 +255,8 @@ def language_scoring_html(scoring: dict) -> str:
     rungs = scoring["language"]
     hybrid = next(r for r in rungs if "hybrid" in r["rung"])
     deployed = next(r for r in rungs if r["deployed"])
-    names = {r["rung"]: LANGUAGE_NAMES[r["rung"]] + (" (in this app)" if r["deployed"] else "") for r in rungs}
+    picture = scoring["picture_search"]
+    names ={r["rung"]: LANGUAGE_NAMES[r["rung"]] + (" (in this app)" if r["deployed"] else "") for r in rungs}
     ladder = bars_html([(names[r["rung"]], r["test"], f'{r["test"] * 100:.1f}%') for r in rungs],
                        top=next(k for k, r in enumerate(rungs) if r["deployed"]), wide=True)
     return (f'<div class="card"><h3>Language search</h3><p class="big">{deployed["test"] * 100:.1f}%</p>'
@@ -264,6 +265,9 @@ def language_scoring_html(scoring: dict) -> str:
             f'<p class="spaced">Adding generated descriptions (hybrid) scores {hybrid["test"] * 100:.1f}% against {deployed["test"] * 100:.1f}%. '
             f'That gap cannot be told from chance (p = {scoring["hybrid_p_value"]}), so we kept the simpler search: one model, '
             f'no paid service.</p>'
+            f'<p>Searching with a picture uses the same model: {picture["same_genre_at_5"] * 100:.1f}% of the 5 nearest paintings '
+            f'share its genre (chance: {picture["chance"] * 100:.1f}%). No visitor question is behind this number, only the '
+            f'labels of the museum.</p>'
             f'<p class="hint">Answers were graded by an AI that sees only the question and the painting, checked against a human on '
             f'150 pairs (kappa {scoring["judge_kappa"]}). The whole project cost {scoring["project_cost_usd"]} $, almost all of it to '
             f'measure; running the search costs nothing.</p></div>')

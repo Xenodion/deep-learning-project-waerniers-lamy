@@ -70,8 +70,18 @@ def genre_notes() -> dict[str, dict[str, str]]:
     return notes
 
 
-def scoring() -> dict:
-    """The numbers of the Scoring tab: test scores of the vision ladder and nDCG@5 of the language ladder."""
+def picture_search_scores(collection: pd.DataFrame, embeddings: np.ndarray, k: int = 5) -> dict[str, float]:
+    """Share of the k nearest paintings (itself left out) of the same genre, and the same share by chance (adr/0023)."""
+    similarity = embeddings @ embeddings.T
+    np.fill_diagonal(similarity, -np.inf)
+    genres = collection["genre"].to_numpy()
+    same = genres[np.argsort(-similarity, axis=1)[:, :k]] == genres[:, None]
+    counts, n = collection["genre"].value_counts(), len(collection)
+    return {"same_genre_at_5": float(same.mean()), "chance": float((counts * (counts - 1)).sum() / (n * (n - 1)))}
+
+
+def scoring(picture_search: dict[str, float]) -> dict:
+    """The numbers of the Scoring tab: test scores of the vision ladder, nDCG@5 of the language ladder, picture search."""
     runs = pd.read_csv(REPO_ROOT / "results" / "experiments.csv")
     classical = pd.read_csv(REPO_ROOT / "results" / "classical_baseline.csv").query("chosen")  # P11, adr/0014
     vision = [{"name": label, "test_acc": float(runs.loc[runs["name"] == run, "test_acc"].dropna().iloc[0])}
@@ -83,7 +93,7 @@ def scoring() -> dict:
     language = [{"rung": rung, "dev": float(dev[rung]), "test": float(test[rung]), "deployed": rung == DEPLOYED_RUNG}
                 for rung in test.index]
     return {"vision": vision, "language": language, "judge_kappa": JUDGE_KAPPA, "project_cost_usd": PROJECT_COST_USD,
-            "hybrid_p_value": HYBRID_P_VALUE}
+            "hybrid_p_value": HYBRID_P_VALUE, "picture_search": picture_search}
 
 
 def main() -> None:
@@ -124,7 +134,10 @@ def main() -> None:
     np.save(OUT / "siglip_embeddings.npy", embeddings)
 
     (OUT / "genre_notes.json").write_text(json.dumps(genre_notes(), indent=1), encoding="utf-8")
-    (OUT / "scoring.json").write_text(json.dumps(scoring(), indent=1), encoding="utf-8")
+    picture_search = picture_search_scores(collection, embeddings)
+    print(f"Picture search, same genre in the 5 nearest: {picture_search['same_genre_at_5']:.1%} "
+          f"(chance: {picture_search['chance']:.1%})")
+    (OUT / "scoring.json").write_text(json.dumps(scoring(picture_search), indent=1), encoding="utf-8")
 
     shutil.copy2(REPO_ROOT / "results" / "final_model.pt", OUT / "final_model.pt")
     shutil.copy2(REPO_ROOT / "demo.py", OUT / "app.py")
