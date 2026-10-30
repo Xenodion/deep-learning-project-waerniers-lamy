@@ -27,6 +27,8 @@ BUNDLE = APP_DIR if (APP_DIR / "collection.csv").exists() else APP_DIR / "app"
 MAX_CONCURRENT_JOBS, MAX_QUEUED_JOBS = 2, 16
 MAX_QUERY_CHARS = 200  # SigLIP reads 64 tokens anyway
 UPLOAD_LIMIT_BYTES = 1  # the app takes no upload: this also shuts gradio's own upload route
+UPLOAD_SIDE = 1024  # an uploaded picture is shrunk to this before SigLIP
+Image.MAX_IMAGE_PIXELS = 25_000_000  # Pillow refuses above twice this (50 Mpx, ~150 MB in RGB): no decompression bomb
 
 GENRES = ["cityscape", "landscape", "portrait", "religious_painting", "still_life"]
 GENRE_NAME = {"cityscape": "Cityscape", "landscape": "Landscape", "portrait": "Portrait",
@@ -62,7 +64,7 @@ def classify_probs(image: Image.Image) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------------------------------
-# 2. Collection search: SigLIP text tower against precomputed image embeddings
+# 2. Collection search: SigLIP text or image tower against precomputed image embeddings
 # --------------------------------------------------------------------------------------------------
 _siglip = None
 
@@ -75,15 +77,37 @@ def _load_siglip():
     return _siglip
 
 
+def _normalised(out) -> np.ndarray:
+    # transformers returns a tensor or, in recent versions, a model output holding it; same as nlp/utils._pooled
+    vec = out if isinstance(out, torch.Tensor) else out.pooler_output
+    return torch.nn.functional.normalize(vec, dim=-1).numpy()
+
+
+def rank(vec: np.ndarray, embeddings: np.ndarray, k: int) -> list[int]:
+    """Rows of the k paintings closest to vec (cosine: both sides are L2-normalised)."""
+    return list(np.argsort(-(vec @ embeddings.T)[0])[:k])
+
+
 def search_order(query: str, embeddings: np.ndarray, k: int) -> list[int]:
     processor, model = _load_siglip()
     # SigLIP was trained with max_length padding; other paddings silently degrade its text embeddings.
     inputs = processor(text=[query], padding="max_length", truncation=True, return_tensors="pt")
     with torch.no_grad():
-        out = model.get_text_features(**inputs)
-        vec = out if isinstance(out, torch.Tensor) else out.pooler_output
-        vec = torch.nn.functional.normalize(vec, dim=-1).numpy()
-    return list(np.argsort(-(vec @ embeddings.T)[0])[:k])
+        return rank(_normalised(model.get_text_features(**inputs)), embeddings, k)
+
+
+def embed_image(image: Image.Image) -> np.ndarray:
+    """SigLIP vector of one picture, made exactly like siglip_embeddings.npy (nlp/utils.encode_siglip_images)."""
+    processor, model = _load_siglip()
+    inputs = processor(images=[image.convert("RGB")], return_tensors="pt")
+    with torch.no_grad():
+        return _normalised(model.get_image_features(**inputs))
+
+
+def image_search_order(image: Image.Image, embeddings: np.ndarray, k: int) -> list[int]:
+    image = image.copy()
+    image.thumbnail((UPLOAD_SIDE, UPLOAD_SIDE))  # SigLIP shrinks it to 224 anyway; this bounds the work before
+    return rank(embed_image(image), embeddings, k)
 
 
 def timed(fn, *args):
