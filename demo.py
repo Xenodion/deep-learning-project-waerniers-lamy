@@ -26,7 +26,9 @@ APP_DIR = Path(__file__).resolve().parent
 BUNDLE = APP_DIR if (APP_DIR / "collection.csv").exists() else APP_DIR / "app"
 MAX_CONCURRENT_JOBS, MAX_QUEUED_JOBS = 2, 16
 MAX_QUERY_CHARS = 200  # SigLIP reads 64 tokens anyway
-UPLOAD_LIMIT_BYTES = 1  # the app takes no upload: this also shuts gradio's own upload route
+UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024  # a phone photo, even 48 Mpx; gradio refuses bigger files before decoding them
+UPLOAD_SIDE = 1024  # an uploaded picture is shrunk to this before SigLIP
+Image.MAX_IMAGE_PIXELS = 25_000_000  # Pillow refuses above twice this (50 Mpx, ~150 MB in RGB): no decompression bomb
 
 GENRES = ["cityscape", "landscape", "portrait", "religious_painting", "still_life"]
 GENRE_NAME = {"cityscape": "Cityscape", "landscape": "Landscape", "portrait": "Portrait",
@@ -62,7 +64,7 @@ def classify_probs(image: Image.Image) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------------------------------
-# 2. Collection search: SigLIP text tower against precomputed image embeddings
+# 2. Collection search: SigLIP text or image tower against precomputed image embeddings
 # --------------------------------------------------------------------------------------------------
 _siglip = None
 
@@ -75,15 +77,37 @@ def _load_siglip():
     return _siglip
 
 
+def _normalised(out) -> np.ndarray:
+    # transformers returns a tensor or, in recent versions, a model output holding it; same as nlp/utils._pooled
+    vec = out if isinstance(out, torch.Tensor) else out.pooler_output
+    return torch.nn.functional.normalize(vec, dim=-1).numpy()
+
+
+def rank(vec: np.ndarray, embeddings: np.ndarray, k: int) -> list[int]:
+    """Rows of the k paintings closest to vec (cosine: both sides are L2-normalised)."""
+    return list(np.argsort(-(vec @ embeddings.T)[0])[:k])
+
+
 def search_order(query: str, embeddings: np.ndarray, k: int) -> list[int]:
     processor, model = _load_siglip()
     # SigLIP was trained with max_length padding; other paddings silently degrade its text embeddings.
     inputs = processor(text=[query], padding="max_length", truncation=True, return_tensors="pt")
     with torch.no_grad():
-        out = model.get_text_features(**inputs)
-        vec = out if isinstance(out, torch.Tensor) else out.pooler_output
-        vec = torch.nn.functional.normalize(vec, dim=-1).numpy()
-    return list(np.argsort(-(vec @ embeddings.T)[0])[:k])
+        return rank(_normalised(model.get_text_features(**inputs)), embeddings, k)
+
+
+def embed_image(image: Image.Image) -> np.ndarray:
+    """SigLIP vector of one picture, made exactly like siglip_embeddings.npy (nlp/utils.encode_siglip_images)."""
+    processor, model = _load_siglip()
+    inputs = processor(images=[image.convert("RGB")], return_tensors="pt")
+    with torch.no_grad():
+        return _normalised(model.get_image_features(**inputs))
+
+
+def image_search_order(image: Image.Image, embeddings: np.ndarray, k: int) -> list[int]:
+    image = image.copy()
+    image.thumbnail((UPLOAD_SIDE, UPLOAD_SIDE))  # SigLIP shrinks it to 224 anyway; this bounds the work before
+    return rank(embed_image(image), embeddings, k)
 
 
 def timed(fn, *args):
@@ -154,7 +178,7 @@ def wall_html(collection: pd.DataFrame, rows: list[int]) -> str:
 
 def found_html(collection: pd.DataFrame, rows: list[int], ms: float | None = None) -> str:
     if not rows:
-        return '<p class="hint centered">Type a description above, or pick one of the ideas.</p>'
+        return '<p class="hint centered">Type a description above, pick one of the ideas, or show a picture.</p>'
     cards = "".join(
         f'<figure class="found-item"><img src="{_url(collection.loc[i, "path"])}" alt="">'
         f'<figcaption><strong>{rank}.</strong> {GENRE_NAME[collection.loc[i, "genre"]]}<br>'
@@ -231,7 +255,8 @@ def language_scoring_html(scoring: dict) -> str:
     rungs = scoring["language"]
     hybrid = next(r for r in rungs if "hybrid" in r["rung"])
     deployed = next(r for r in rungs if r["deployed"])
-    names = {r["rung"]: LANGUAGE_NAMES[r["rung"]] + (" (in this app)" if r["deployed"] else "") for r in rungs}
+    picture = scoring["picture_search"]
+    names ={r["rung"]: LANGUAGE_NAMES[r["rung"]] + (" (in this app)" if r["deployed"] else "") for r in rungs}
     ladder = bars_html([(names[r["rung"]], r["test"], f'{r["test"] * 100:.1f}%') for r in rungs],
                        top=next(k for k, r in enumerate(rungs) if r["deployed"]), wide=True)
     return (f'<div class="card"><h3>Language search</h3><p class="big">{deployed["test"] * 100:.1f}%</p>'
@@ -240,6 +265,9 @@ def language_scoring_html(scoring: dict) -> str:
             f'<p class="spaced">Adding generated descriptions (hybrid) scores {hybrid["test"] * 100:.1f}% against {deployed["test"] * 100:.1f}%. '
             f'That gap cannot be told from chance (p = {scoring["hybrid_p_value"]}), so we kept the simpler search: one model, '
             f'no paid service.</p>'
+            f'<p>Searching with a picture uses the same model: {picture["same_genre_at_5"] * 100:.1f}% of the 5 nearest paintings '
+            f'share its genre (chance: {picture["chance"] * 100:.1f}%). No visitor question is behind this number, only the '
+            f'labels of the museum.</p>'
             f'<p class="hint">Answers were graded by an AI that sees only the question and the painting, checked against a human on '
             f'150 pairs (kappa {scoring["judge_kappa"]}). The whole project cost {scoring["project_cost_usd"]} $, almost all of it to '
             f'measure; running the search costs nothing.</p></div>')
@@ -336,6 +364,9 @@ button[role=tab][aria-selected=true] { color: var(--ink) !important; border-colo
 #found .meter { text-align: center; }
 #query textarea, #query input { background: var(--panel) !important; color: var(--ink) !important; border: 1px solid var(--line) !important; border-radius: 12px !important; font-size: 1.05rem; }
 #search-row { align-items: end; gap: 10px; }
+#upload { max-width: 420px; margin: 0 auto 18px; }
+#upload label, #upload .label-wrap span { color: var(--muted) !important; }
+#upload .image-container, #upload .upload-container { background: var(--panel) !important; border: 1px dashed var(--line); border-radius: 14px; }
 .primary-btn, button.primary { background: var(--brass) !important; color: #1a1a14 !important; border: none !important; font-weight: 600; border-radius: 12px !important; }
 #chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 10px 0 18px; }
 .chip { background: var(--panel) !important; color: var(--muted) !important; border: 1px solid var(--line) !important; border-radius: 999px !important; min-width: 0 !important; width: auto !important; flex: 0 0 auto !important; font-size: .9rem !important; }
@@ -396,15 +427,23 @@ def build_app() -> gr.Blocks:
         rows, ms = timed(search_order, query, embeddings, SEARCH_RESULTS)
         return found_html(collection, rows, ms)
 
-    with gr.Blocks(title="Museum Guide") as demo, gr.Column(elem_id="app"):
+    def search_by_image(image: Image.Image | None) -> str:
+        # an unreadable, truncated or too large file never gets here: gradio refuses it while decoding (adr/0023)
+        if image is None:
+            return found_html(collection, [])
+        rows, ms = timed(image_search_order, image, embeddings, SEARCH_RESULTS)
+        return found_html(collection, rows, ms)
+
+    # uploads are written to gradio's cache, which is memory on Cloud Run: files older than 5 min go every 5 min
+    with gr.Blocks(title="Museum Guide", delete_cache=(300, 300)) as demo, gr.Column(elem_id="app"):
         gr.HTML('<div id="hero"><h1>Museum Guide</h1>'
-                '<p>Name the genre of a painting, or find paintings by describing them.</p></div>')
+                '<p>Name the genre of a painting, or find paintings by describing or showing them.</p></div>')
         with gr.Tabs():
             with gr.Tab("1 · Recognise"):
                 gr.HTML(tab_intro("Brief, point 1. The visitor points the camera at a painting; the guide recognises its genre "
                                   "and tells the story of that tradition."))
                 with gr.Row(elem_id="stage"):
-                    # display only: visitors cannot upload anything, the server never decodes a file it did not ship
+                    # display only: the one upload of the app is the picture search of tab 2
                     preview = gr.Image(type="pil", interactive=False, show_label=False, elem_id="preview",
                                        height=320, buttons=[])
                     verdict = gr.HTML(EMPTY_HTML)
@@ -418,19 +457,24 @@ def build_app() -> gr.Blocks:
                 pick_go.click(select_painting, picked, [preview, verdict], js="() => [window.pickedRow]")
 
             with gr.Tab("2 · Ask"):
-                gr.HTML(tab_intro("Brief, point 2. The visitor asks in plain words; the guide proposes the artworks "
-                                  "of the collection that best match."))
+                gr.HTML(tab_intro("Brief, point 2. The visitor asks in plain words, or shows a picture; the guide proposes "
+                                  "the artworks of the collection that best match."))
                 with gr.Row(elem_id="search-row"):
                     query = gr.Textbox(placeholder="a stormy sea with big waves", show_label=False,
                                        container=False, scale=5, elem_id="query", max_length=MAX_QUERY_CHARS)
                     go = gr.Button("Search", variant="primary", scale=1)
                 with gr.Row(elem_id="chips"):
                     chips = [gr.Button(q, elem_classes="chip", size="sm") for q in EXAMPLE_QUERIES]
+                upload = gr.Image(type="pil", sources=["upload"], label="Or show a picture (JPG, PNG or WebP, up to 10 MB)",
+                                  height=200, elem_id="upload", buttons=[])
                 found = gr.HTML(found_html(collection, []), elem_id="found")
-                go.click(search, query, found)
-                query.submit(search, query, found)
+                # one search at a time: a text search clears the picture, a picture clears the text
+                go.click(lambda q: (search(q), None), query, [found, upload])
+                query.submit(lambda q: (search(q), None), query, [found, upload])
                 for chip, text in zip(chips, EXAMPLE_QUERIES):
-                    chip.click(lambda t=text: (t, search(t)), None, [query, found])
+                    chip.click(lambda t=text: (t, search(t), None), None, [query, found, upload])
+                upload.upload(lambda im: (search_by_image(im), ""), upload, [found, query])
+                upload.clear(lambda: found_html(collection, []), None, found)
 
             with gr.Tab("3 · Info"):
                 gr.HTML(f'<div class="info">{brief_html()}'
