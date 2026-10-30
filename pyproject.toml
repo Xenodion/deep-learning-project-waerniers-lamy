@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Museum guide: genre recognition (fine-tuned ResNet-18) and natural-language collection search (SigLIP)"
 readme = "README.md"
 authors = [
-    { name = "Xenodion", email = "alexandre.waerniers@gmail.com" }
+    { name = "Alexandre Waerniers", email = "alexandre.waerniers@gmail.com" },
+    { name = "Vincent Lamy", email = "vincent.lamy.33@gmail.com" },
+    { name = "Yoni Mahieddine", email = "yonimahie38@gmail.com" },
 ]
 requires-python = ">=3.11"
 dependencies = [
