@@ -23,10 +23,10 @@ gcloud run deploy museum-guide --project <project> --region europe-west1 --image
 
 A public URL, so the surface is kept small:
 
-- **One upload, the picture search of tab 2** ([ADR 0023](../adr/0023-image-search.md)). At most 10 MB per file
+- **One upload, the picture search of tab 2** ([ADR 0023](../adr/0023-image-search.md)). At most 5 MB per file (single-slot buffer per user session, immediate deletion on replacement/clear)
   (`max_file_size`: the upload route answers 413 before decoding) and 50 Mpx per picture (`Image.MAX_IMAGE_PIXELS`:
   Pillow refuses decompression bombs, also when Gradio opens the file). Any format Pillow reads is accepted; unreadable
-  files get Gradio's generic error. Uploaded files are never served and leave Gradio's cache after 5 minutes (the disk
+  files get Gradio's generic error. Uploaded files are never served and leave Gradio's cache after 60 seconds (the disk
   of Cloud Run is memory). The image widget of tab 1 only displays.
 - **One text field**, capped at 200 characters.
 - **Files served:** only `images/` and `thumbs/` (`allowed_paths`); the code, weights and CSV answer 403.

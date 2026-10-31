@@ -46,7 +46,7 @@ the brief, the results and the cost.
 
 - **Online demo:** <https://museum-guide-643636450457.europe-west1.run.app>
   (Google Cloud Run, scales to zero: the first visit after a quiet period takes about 40 seconds to wake up). It takes only
-  pictures of 10 MB at most and caps the load; how it is built, limited and deployed is in [`deploy/README.md`](deploy/README.md).
+  pictures of 5 MB at most (single-slot per visitor, 0-leak privacy) and caps the load; how it is built, limited and deployed is in [`deploy/README.md`](deploy/README.md).
 - **Local demo** (needs `data/`, see below; the first command builds `app/` from Museum B and checks that the bundled
   model reproduces the 86.0%):
   ```powershell

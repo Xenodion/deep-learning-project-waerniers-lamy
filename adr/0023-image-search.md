@@ -14,13 +14,17 @@ only decoded images it shipped. Taking a picture means decoding files from anyon
 
 - **The picture is encoded exactly like the collection:** RGB, the SigLIP processor, L2 normalisation, then the same
   cosine ranking as the text search (one `rank()` for both). Encoding a painting of the collection gives back its stored
-  vector (cosine 1.000 on 8 paintings) and the painting comes first. A picture is shrunk to 1024 px first, since SigLIP
+  vector (cosine 1.000 on 8 paintings) and the painting comes first. A picture is shrunk to 512 px first, since SigLIP
   reads 224 px.
-- **10 MB per file** (`max_file_size`): enough for a 48 Mpx phone photo. Gradio's upload route answers 413 above, before
-  any decoding.
+- **5 MB per file** (`max_file_size`): enough for a high-resolution phone photo. Gradio's upload route answers 413 above,
+  before any decoding.
 - **50 Mpx per picture** (`Image.MAX_IMAGE_PIXELS = 25_000_000`, Pillow refuses above twice that): a compressed file of
   200 KB can decode to gigabytes. The limit is global, so it also holds when Gradio opens the file, before our code.
-- **Uploaded files leave Gradio's cache after 5 minutes** (`delete_cache`): on Cloud Run the disk is memory.
+- **Single-slot buffer per session (`gr.State`) & immediate unlinking:** each user session holds at most one uploaded
+  image at any moment. Uploading a new picture unlinks the previous file immediately (`os.remove`); searching by text or
+  clearing the widget destroys the image file immediately.
+- **Uploaded files leave Gradio's cache after 60 seconds** (`delete_cache=(60, 60)`): on Cloud Run the disk is memory;
+  orphaned uploads from closed tabs are aggressively purged.
 - **Same number of results as the text search, 6**, in the same grid; a text search clears the picture and the other way
   round, so the results always answer what is on screen.
 
@@ -42,7 +46,7 @@ to 95.5% (still life). `build_app.py` computes it and the Info tab shows it.
 
 **Consequences.**
 - The visitor can search without words, the brief's point 2 in another form; the cost is a few lines and no new model.
-- The public surface grows: the server decodes files from anyone. Tested refused: 11 MB (413), 64 Mpx (decompression
+- The public surface grows: the server decodes files from anyone. Tested refused: 6 MB (413), 64 Mpx (decompression
   bomb), truncated JPEG, text renamed `.jpg`. Tested accepted: JPEG, WebP, PNG with transparency, grey PNG, 896 px JPEG.
 - A picture search took 65 to 850 ms on a laptop (the largest file slowest); the queue limits (2 jobs at a time, 16
   waiting) still bound the load.
