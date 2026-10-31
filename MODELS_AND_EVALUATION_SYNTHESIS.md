@@ -112,6 +112,13 @@ The 6-rung multimodal recommendation ladder evaluated across 40 diverse queries:
 | **R4: SigLIP Image** | **Direct visual embeddings via SigLIP Dual-Tower** | **0.81** | **0.79** | **82 ms** | **$0** | **CHOSEN PRODUCTION MODEL** ([ADR 0005](adr/0005-nlp-recommendation-ladder.md)). Direct text-to-image dot-product matching. 100% local, no API dependencies, zero recurring cost. |
 | **R5: Hybrid** | Weighted score fusion of R3 + R4 (z-scores) | 0.83 | 0.80 | 115 ms | $0.06 / 1k img | **Rejected.** The gain over SigLIP alone (+0.01 on Museum B) is statistically indistinguishable from noise ($p = 0.78$). Does not justify external API dependencies. |
 
+### Complementary Visual Feature: Picture-to-Picture Search ([ADR 0023](adr/0023-image-search.md))
+To allow visitors to search without formulating a text query (e.g. taking a photo of an artwork or scene with their smartphone), the guide deploys **Image-to-Image similarity search**:
+- **Mechanism:** The uploaded photo is processed through the SigLIP visual encoder (`google/siglip-base-patch16-224`), producing a normalized 768-d vector matched against the precomputed Museum B collection embeddings (`siglip_embeddings.npy`) via cosine similarity.
+- **Museum B Benchmark:** Across the 600 unseen paintings, **88.0%** of the 5 nearest retrieved artworks share the ground-truth genre of the query painting (vs. **19.9%** expected by random chance; 95% bootstrap CI: [86.2%, 89.7%]).
+- **Zero Overhead & Zero Recurring Cost:** Reuses the exact same precomputed embeddings and in-memory SigLIP weights; zero new model parameters, zero fine-tuning, and strictly $0 recurring API cost.
+- **Hardened Cloud Security & Privacy:** Protected by a **single-slot buffer policy per visitor session** (`gr.State` with immediate file unlinking upon replacement, clear, or text query switch), a 5 MB upload ceiling, a 50 Mpx decompression bomb threshold, and aggressive 60-second cache garbage collection. No visitor images are retained or persisted.
+
 ---
 
 ## 5. Final Strategic Recommendation for the Museum Director
