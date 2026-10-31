@@ -10,8 +10,10 @@ scoring.json).
 import copy
 import html
 import json
+import logging
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 import gradio as gr
 import numpy as np
@@ -22,12 +24,13 @@ from PIL import Image
 from torch import nn
 from torchvision.models import ResNet18_Weights, resnet18
 
+log = logging.getLogger(__name__)
 APP_DIR = Path(__file__).resolve().parent
 BUNDLE = APP_DIR if (APP_DIR / "collection.csv").exists() else APP_DIR / "app"
 MAX_CONCURRENT_JOBS, MAX_QUEUED_JOBS = 2, 16
 MAX_QUERY_CHARS = 200  # SigLIP reads 64 tokens anyway
-UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024  # a phone photo, even 48 Mpx; gradio refuses bigger files before decoding them
-UPLOAD_SIDE = 1024  # an uploaded picture is shrunk to this before SigLIP
+UPLOAD_LIMIT_BYTES = 5 * 1024 * 1024  # a phone photo, up to 5 MB; gradio refuses bigger files before decoding them
+UPLOAD_SIDE = 512  # an uploaded picture is shrunk to this before SigLIP (which reads 224 px anyway)
 Image.MAX_IMAGE_PIXELS = 25_000_000  # Pillow refuses above twice this (50 Mpx, ~150 MB in RGB): no decompression bomb
 
 GENRES = ["cityscape", "landscape", "portrait", "religious_painting", "still_life"]
@@ -35,7 +38,7 @@ GENRE_NAME = {"cityscape": "Cityscape", "landscape": "Landscape", "portrait": "P
               "religious_painting": "Religious painting", "still_life": "Still life"}
 SIGLIP_MODEL = "google/siglip-base-patch16-224"
 IMAGENET_MEAN, IMAGENET_STD = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
-SEARCH_RESULTS = 6
+MAX_RESULTS = 20  # every search ranks this many once; the slider only shows the first k of them
 EXAMPLE_QUERIES = ["A stormy sea with big waves.", "A portrait of a woman wearing a hat.", "A snowy winter landscape.",
                    "A busy city street with carriages.", "The Virgin Mary with the infant Jesus.", "A still life with fruit and wine.",
                    "A quiet village at sunset.", "A child playing outdoors.", "Flowers in a vase.", "A dark and gloomy forest.",
@@ -131,18 +134,24 @@ def meter_html(ms: float) -> str:
     return f'<p class="meter">Answered in {ms:.0f} ms on {torch.get_num_threads()} CPU threads</p>'
 
 
-def bars_html(items: list[tuple[str, float, str]], top: int | None = 0, wide: bool = False) -> str:
-    """Horizontal bars: items are (label, share between 0 and 1, text at the end); `top` is the highlighted row."""
+MUSEUM_TAG = '<em class="bar-tag">museum</em>'
+
+
+def bars_html(items: list[tuple[str, float, str]], top: int | None = 0, wide: bool = False, tagged: int | None = None) -> str:
+    """Horizontal bars: items are (label, share between 0 and 1, text at the end); `top` is the highlighted row,
+    `tagged` the row that gets the "museum" tag (the label the museum gave)."""
     rows = "".join(
-        f'<div class="bar{" top" if k == top else ""}"><span class="bar-name">{html.escape(name)}</span>'
+        f'<div class="bar{" top" if k == top else ""}"><span class="bar-name">{html.escape(name)}'
+        f'{MUSEUM_TAG if k == tagged else ""}</span>'
         f'<span class="bar-track"><span class="bar-fill" style="width:{share * 100:.1f}%"></span></span>'
         f'<span class="bar-pct">{text}</span></div>' for k, (name, share, text) in enumerate(items))
     return f'<div class="bars{" wide" if wide else ""}">{rows}</div>'
 
 
-def probs_bars(probs: np.ndarray) -> str:
+def probs_bars(probs: np.ndarray, truth: str | None = None) -> str:
     order = np.argsort(-probs)
-    return bars_html([(GENRE_NAME[GENRES[i]], float(probs[i]), f"{probs[i] * 100:.0f}%") for i in order])
+    tagged = next((k for k, i in enumerate(order) if GENRES[i] == truth), None)
+    return bars_html([(GENRE_NAME[GENRES[i]], float(probs[i]), f"{probs[i] * 100:.0f}%") for i in order], tagged=tagged)
 
 
 def about_html(note: dict[str, str]) -> str:
@@ -151,18 +160,27 @@ def about_html(note: dict[str, str]) -> str:
             f' (text under CC BY-SA)</p></div>')
 
 
+def _role_html(kind: str, title: str, genre: str, detail: str) -> str:
+    return (f'<div class="role {kind}"><span class="role-title">{title}</span><strong>{GENRE_NAME[genre]}</strong>'
+            f'<small>{detail}</small></div>')
+
+
 def verdict_html(probs: np.ndarray, row: pd.Series | None, ms: float, notes: dict) -> str:
+    """Two named blocks (what the museum says, what the model says), a banner right or wrong, then the model's shares."""
     guess = GENRES[int(np.argmax(probs))]
+    pred = _role_html("pred", "Model prediction", guess, f"{probs.max() * 100:.0f}% sure")
     if row is None:
-        badge = f'<p class="said">The model sees a <strong>{GENRE_NAME[guess].lower()}</strong>.</p>'
-        label = ""
+        return f'<div class="card"><div class="roles">{pred}</div>{probs_bars(probs)}{about_html(notes[guess])}{meter_html(ms)}</div>'
+    truth = row["genre"]
+    detail = f'{html.escape(str(row["style"]).replace("_", " "))} by {html.escape(_artist(row))}'
+    if guess == truth:
+        banner = '<p class="result ok"><span>✓</span> Correct: the model agrees with the museum.</p>'
     else:
-        ok = guess == row["genre"]
-        label = (f'<p class="wall-label"><span>{html.escape(str(row["style"]).replace("_", " "))}</span> by '
-                 f'{html.escape(_artist(row))}<br>Museum label: <strong>{GENRE_NAME[row["genre"]]}</strong></p>')
-        badge = (f'<p class="said {"ok" if ok else "miss"}">The model says <strong>{GENRE_NAME[guess].lower()}</strong>: '
-                 f'{"it matches the museum label." if ok else "it differs from the museum label."}</p>')
-    return f'<div class="card">{label}{badge}{probs_bars(probs)}{about_html(notes[guess])}{meter_html(ms)}</div>'
+        banner = (f'<p class="result miss"><span>✗</span> Wrong: the model said {GENRE_NAME[guess].lower()}, '
+                  f'the museum says {GENRE_NAME[truth].lower()}.</p>')
+    return (f'<div class="card"><div class="roles">{_role_html("truth", "Museum label", truth, detail)}{pred}</div>{banner}'
+            f'<p class="hint">What the model thinks, genre by genre:</p>{probs_bars(probs, truth)}'
+            f'{about_html(notes[guess])}{meter_html(ms)}</div>')
 
 
 def _url(relative: str) -> str:
@@ -176,27 +194,139 @@ def wall_html(collection: pd.DataFrame, rows: list[int]) -> str:
     return f'<div class="wall">{tiles}</div>'
 
 
-def found_html(collection: pd.DataFrame, rows: list[int], ms: float | None = None) -> str:
+class Found(NamedTuple):
+    """The last search of a visitor: kept so the slider can re-cut it without running the model again."""
+    rows: list[int]
+    subject: str  # what the results are close to, e.g. '"a stormy sea"' or 'your picture'
+    ms: float | None
+
+
+def found_html(collection: pd.DataFrame, found: Found, k: int) -> str:
+    rows = found.rows[:k]
     if not rows:
         return '<p class="hint centered">Type a description above, pick one of the ideas, or show a picture.</p>'
     cards = "".join(
-        f'<figure class="found-item"><img src="{_url(collection.loc[i, "path"])}" alt="">'
-        f'<figcaption><strong>{rank}.</strong> {GENRE_NAME[collection.loc[i, "genre"]]}<br>'
-        f'<span>{html.escape(_artist(collection.loc[i]))}</span></figcaption></figure>' for rank, i in enumerate(rows, 1))
-    return f'<div class="found">{cards}</div>{meter_html(ms) if ms is not None else ""}'
+        f'<figure class="found-item" data-row="{i}" tabindex="0"><img src="{_url(collection.loc[i, "path"])}" '
+        f'alt="{GENRE_NAME[collection.loc[i, "genre"]]} by {html.escape(_artist(collection.loc[i]))}">'
+        f'<figcaption><strong>{n}.</strong> {GENRE_NAME[collection.loc[i, "genre"]]}<br>'
+        f'<span>{html.escape(_artist(collection.loc[i]))}</span></figcaption></figure>'
+        for n, i in enumerate(rows, 1))
+    head = f'<p class="found-head">{len(rows)} closest to {html.escape(found.subject)}</p>'
+    return f'{head}<div class="found">{cards}</div>{meter_html(found.ms) if found.ms is not None else ""}'
+
+
+def example_tiles_html(collection: pd.DataFrame, n: int = 30) -> str:
+    """Random sample of n paintings from Museum B for the interactive sidebar."""
+    sampled = collection.sample(min(n, len(collection)), random_state=None)
+    items = []
+    for idx, row in sampled.iterrows():
+        artist = _artist(row)
+        genre = GENRE_NAME[row["genre"]]
+        path = _url(row["path"])
+        items.append(
+            f'<button class="sidebar-item" data-row="{idx}" title="{genre} - {html.escape(artist)}">'
+            f'<img src="{path}" alt="{html.escape(artist)}" loading="lazy">'
+            f'<div class="sidebar-item-info">'
+            f'<span class="sidebar-item-genre">{genre}</span>'
+            f'<small class="sidebar-item-artist">{html.escape(artist)}</small>'
+            f'</div>'
+            f'</button>'
+        )
+    return f'<div class="sidebar-scroll">{"".join(items)}</div>'
 
 
 PICK_JS = """<script>
 document.addEventListener('click', (e) => {
   const tile = e.target.closest('.wall-item');
   const go = document.querySelector('#pick-go');
-  if (!tile || !go) return;
-  document.querySelectorAll('.wall-item.selected').forEach((t) => t.classList.remove('selected'));
-  tile.classList.add('selected');
-  window.pickedRow = tile.dataset.row;  // read back by the js= hook of the hidden button
-  go.click();
-  document.querySelector('#stage')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (tile && go) {
+    document.querySelectorAll('.wall-item.selected').forEach((t) => t.classList.remove('selected'));
+    tile.classList.add('selected');
+    window.pickedRow = tile.dataset.row;  // read back by the js= hook of the hidden button
+    go.click();
+    document.querySelector('#stage')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
+  if (e.target.closest('#lightbox')) { document.querySelector('#lightbox').remove(); return; }
+  const result = e.target.closest('.found-item');
+  if (result) {  // enlarge a search result
+    const box = document.createElement('div');
+    box.id = 'lightbox';
+    box.innerHTML = '<figure><img alt=""><figcaption></figcaption></figure>';
+    box.querySelector('img').src = result.querySelector('img').src;
+    box.querySelector('figcaption').innerHTML = result.querySelector('figcaption').innerHTML;
+    document.body.appendChild(box);
+    return;
+  }
+  const toggleBtn = e.target.closest('#image-toggle-btn');
+if (toggleBtn) {
+  setPopover(!document.querySelector('#image-popover')?.classList.contains('open'));
+  return;
+}
+const closeBtn = e.target.closest('#close-popover-btn');
+if (closeBtn) {
+  document.querySelector('#image-popover')?.classList.remove('open');
+  document.querySelector('#image-toggle-btn')?.classList.remove('active');
+  return;
+}
+const ex = e.target.closest('.sidebar-item');
+const exGo = document.querySelector('#sidebar-go');
+if (ex && exGo) {
+  document.querySelectorAll('.sidebar-item.selected').forEach((t) => t.classList.remove('selected'));
+  ex.classList.add('selected');
+  window.pickedExample = ex.dataset.row;
+  exGo.click();
+  document.querySelector('#image-popover')?.classList.remove('open');
+  document.querySelector('#image-toggle-btn')?.classList.remove('active');
+  return;
+}
+const ref = e.target.closest('#refresh-examples-btn');
+const refGo = document.querySelector('#refresh-go');
+if (ref && refGo) {
+  refGo.click();
+  return;
+}
+if (!e.target.closest('#image-popover') && !e.target.closest('#image-toggle-btn')) {
+  const popover = document.querySelector('#image-popover');
+  if (popover && popover.classList.contains('open')) {
+    popover.classList.remove('open');
+    document.querySelector('#image-toggle-btn')?.classList.remove('active');
+  }
+}
 });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { document.querySelector('#lightbox')?.remove(); setPopover(false); }
+  if (e.key === 'Enter' && e.target.matches?.('.found-item')) e.target.click();  // results are focusable
+});
+// drag a search result onto the picture search: opening the box while dragging gives a target to drop on
+const setPopover = (open) => {
+  const pop = document.querySelector('#image-popover');
+  pop?.classList.toggle('open', open);
+  document.querySelector('#image-toggle-btn')?.classList.toggle('active', open);
+  // gradio clips what goes below the screen and the page cannot scroll there: the box fits the room left and scrolls inside
+  if (open && pop) pop.style.maxHeight = Math.max(240, innerHeight - pop.getBoundingClientRect().top - 12) + 'px';
+};
+const onDropTarget = (e) => e.target.closest?.('#image-popover, #image-toggle-btn');
+document.addEventListener('dragstart', (e) => {
+  const result = e.target.closest?.('.found-item');
+  if (!result) return;
+  e.dataTransfer.setData('text/x-row', result.dataset.row);
+  e.dataTransfer.effectAllowed = 'copy';
+  setPopover(true);
+});
+document.addEventListener('dragend', () => setPopover(false));
+document.addEventListener('dragover', (e) => {
+  if (e.dataTransfer.types.includes('text/x-row') && onDropTarget(e)) e.preventDefault();
+}, true);
+document.addEventListener('drop', (e) => {
+  const row = e.dataTransfer.getData('text/x-row');
+  if (!row || !onDropTarget(e)) return;
+  e.preventDefault();
+  e.stopPropagation();  // gradio's own upload zone would try to read the dropped page image as a file
+  window.pickedExample = row;  // same path as clicking an example of the box
+  document.querySelector('#sidebar-go')?.click();
+  setPopover(false);
+}, true);
 </script>"""
 
 
@@ -308,11 +438,18 @@ button[role=tab][aria-selected=true] { color: var(--ink) !important; border-colo
 .about { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: .95rem; }
 .about p { margin: 0 0 6px; } .about .credit { font-size: .85rem; }
 .about a { color: var(--brass); text-underline-offset: 3px; }
-.wall-label { border-left: 3px solid var(--brass); padding-left: 12px; color: var(--muted); font-size: .95rem; }
-.wall-label span { color: var(--ink); font-weight: 600; }
-.wall-label strong { color: var(--ink); }
+.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.role { display: flex; flex-direction: column; gap: 3px; background: #10201f; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.role.truth { border-left: 4px solid var(--ok); } .role.pred { border-left: 4px solid var(--brass); }
+.role-title { color: var(--muted); font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.role strong { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.35rem; font-weight: 600; color: var(--ink); line-height: 1.2; }
+.role small { color: var(--muted); font-size: .85rem; }
+.result { display: flex; gap: 10px; align-items: center; margin: 0 0 14px !important; padding: 10px 14px; border-radius: 10px; font-weight: 600; border: 1px solid; }
+.result span { font-size: 1.2rem; }
+.result.ok { color: var(--ok); background: rgba(134, 201, 164, .12); border-color: var(--ok); }
+.result.miss { color: var(--miss); background: rgba(227, 148, 132, .12); border-color: var(--miss); }
+.bar-tag { margin-left: 6px; padding: 1px 7px; border: 1px solid var(--ok); border-radius: 999px; color: var(--ok); font-size: .68rem; font-style: normal; font-weight: 500; }
 .said { font-size: 1.1rem; }
-.said.ok strong { color: var(--ok); } .said.miss strong { color: var(--miss); }
 .big { font-family: 'Bricolage Grotesque', sans-serif; font-size: clamp(2.6rem, 2rem + 2vw, 3.8rem); font-weight: 600; color: var(--brass); line-height: 1; }
 .bars { display: grid; gap: 9px; margin-top: 14px; }
 .bar { display: grid; grid-template-columns: clamp(6.5rem, 14vw, 9rem) 1fr 2.8rem; align-items: center; gap: 10px; font-size: .95rem; color: var(--muted); }
@@ -339,7 +476,8 @@ button[role=tab][aria-selected=true] { color: var(--ink) !important; border-colo
 #stage { gap: clamp(14px, 2vw, 28px); align-items: stretch; flex-wrap: wrap !important; }
 #stage > div { display: flex; flex-direction: column; flex: 1 1 320px !important; min-width: min(100%, 320px) !important; }
 #stage .block, #stage .html-container, #stage .prose { flex: 1; height: 100%; padding: 0; margin: 0; }
-#preview { height: auto !important; min-height: clamp(260px, 34vh, 420px); }
+#preview { --sq: min(620px, calc(100vw - 32px), max(420px, 72vh)); height: var(--sq) !important; width: var(--sq) !important; }  /* square display area */
+#stage > #preview { flex: 0 0 auto !important; min-width: 0 !important; }
 #preview > div, #preview .image-container, #preview .upload-container, #preview .image-frame { height: 100% !important; }
 #preview, #preview .image-container, #preview .upload-container, #preview .image-frame { background: var(--panel) !important; border: 1px solid var(--line); border-radius: 14px; }
 #preview img { object-fit: contain; }
@@ -357,7 +495,14 @@ button[role=tab][aria-selected=true] { color: var(--ink) !important; border-colo
 .wall-item.selected { border-color: var(--brass); }
 .sr-only { position: absolute !important; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .found { display: grid; grid-template-columns: repeat(2, 1fr); gap: clamp(10px, 1.5vw, 20px); }
-.found-item { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.found-item { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: zoom-in; }
+.found-item:hover, .found-item:focus-visible { border-color: var(--brass); }
+.found-head { color: var(--muted); margin: 14px 0 10px !important; font-size: .95rem; }
+#found { min-height: 140px; }
+#lightbox { position: fixed; inset: 0; z-index: 2000; background: rgba(8, 16, 18, .92); display: flex; align-items: center; justify-content: center; cursor: zoom-out; padding: 24px; }
+#lightbox figure { margin: 0; text-align: center; color: var(--ink); }
+#lightbox img { max-width: 96vw; max-height: 86vh; min-height: 60vh; object-fit: contain; border-radius: 8px; }
+#lightbox figcaption { margin-top: 12px; line-height: 1.4; } #lightbox figcaption span { color: var(--muted); }
 .found-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 .found-item figcaption { padding: 10px 12px; font-size: .95rem; line-height: 1.4; } .found-item figcaption span { color: var(--muted); }
 .centered { text-align: center; }
@@ -367,13 +512,34 @@ button[role=tab][aria-selected=true] { color: var(--ink) !important; border-colo
 #upload { max-width: 420px; margin: 0 auto 18px; }
 #upload label, #upload .label-wrap span { color: var(--muted) !important; }
 #upload .image-container, #upload .upload-container { background: var(--panel) !important; border: 1px dashed var(--line); border-radius: 14px; }
+#search-wrapper { position: relative; width: 100%; margin-bottom: 8px; }
+#image-toggle-btn { background: var(--panel) !important; color: var(--ink) !important; border: 1px solid var(--line) !important; border-radius: 12px !important; font-weight: 500 !important; white-space: nowrap !important; transition: all .15s ease !important; cursor: pointer !important; }
+#image-toggle-btn:hover, #image-toggle-btn.active { border-color: var(--brass) !important; color: var(--brass) !important; background: rgba(214, 171, 82, 0.12) !important; }
+#image-popover { position: absolute !important; top: calc(100% + 8px) !important; right: 0 !important; width: 420px !important; max-width: calc(100vw - 32px) !important; max-height: calc(100vh - 140px); overflow-y: auto; scrollbar-gutter: stable; background: #172b2f !important; border: 1px solid var(--brass) !important; border-radius: 16px !important; padding: 14px !important; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7) !important; z-index: 1000 !important; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-8px); transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s; }
+#image-popover.open { opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; transform: translateY(0) !important; }
+#image-popover #upload { width: 100% !important; max-width: 100% !important; margin: 0 0 10px 0 !important; height: min(380px, calc(100vw - 74px)) !important; flex-shrink: 0; }  /* square: 420px popover minus padding and scrollbar */
+#image-popover #upload > div, #image-popover #upload .image-container, #image-popover #upload .upload-container, #image-popover #upload .image-frame { height: 100% !important; }
+#image-popover #upload img { width: 100% !important; height: 100% !important; object-fit: cover !important; }
+.header-actions { display: flex; gap: 6px; align-items: center; }
+.sidebar-header { display: flex; justify-content: space-between; align-items: center; margin: 4px 0 10px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+.refresh-btn { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 2px 7px; cursor: pointer; font-size: 0.8rem; transition: all .15s; }
+.refresh-btn:hover { color: var(--ink); border-color: var(--brass); background: rgba(214, 171, 82, 0.1); }
+.sidebar-scroll { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding-right: 4px; }
+.sidebar-item { position: relative; aspect-ratio: 1; padding: 0; overflow: hidden; background: #10201f; border: 2px solid transparent; border-radius: 8px; cursor: pointer; transition: border-color .15s; }
+.sidebar-item:hover { border-color: var(--brass); }
+.sidebar-item.selected { border-color: var(--brass); }
+.sidebar-item img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sidebar-item-info { display: none; }
+#k-slider { max-width: 300px; margin: 14px auto 0; padding: 0 !important; background: transparent !important; border: none !important; }
+#k-slider input[type=range] { accent-color: var(--brass) !important; }
+#k-slider label span, #k-slider span { color: var(--muted) !important; font-size: 0.9rem !important; }
 .primary-btn, button.primary { background: var(--brass) !important; color: #1a1a14 !important; border: none !important; font-weight: 600; border-radius: 12px !important; }
 #chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 10px 0 18px; }
 .chip { background: var(--panel) !important; color: var(--muted) !important; border: 1px solid var(--line) !important; border-radius: 999px !important; min-width: 0 !important; width: auto !important; flex: 0 0 auto !important; font-size: .9rem !important; }
 .chip:hover { color: var(--ink) !important; border-color: var(--brass) !important; }
 button:focus-visible, [role=tab]:focus-visible, label:focus-within { outline: 2px solid var(--brass) !important; outline-offset: 2px; }
 @media (min-width: 700px) { .found { grid-template-columns: repeat(3, 1fr); } }
-@media (min-width: 1100px) { .found { grid-template-columns: repeat(6, 1fr); } }
+@media (min-width: 1100px) { .found { grid-template-columns: repeat(5, 1fr); } }
 @media (max-width: 760px) { #app { display: block; } #app .tabs { display: block; } #app .tab-wrapper { margin: 0; width: 100% !important; } #app .tabitem { padding-top: 10px; } }
 @media (max-width: 640px) { button[role=tab] { font-size: .8rem; padding: 6px 3px !important; margin: 0 !important; }
   .bar, .bars.wide .bar { grid-template-columns: 1fr 3rem; row-gap: 4px; } .bar-name { grid-column: 1 / -1; } .bar-track { grid-column: 1; } .bar-pct { grid-column: 2; } }
@@ -420,22 +586,71 @@ def build_app() -> gr.Blocks:
         probs, ms = timed(classify_probs, image)
         return image, verdict_html(probs, row, ms, notes)
 
-    def search(query: str) -> str:
+    no_results = Found([], "", None)
+
+    def text_found(query: str) -> Found:
         query = query[:MAX_QUERY_CHARS]
         if not query.strip():
-            return found_html(collection, [])
-        rows, ms = timed(search_order, query, embeddings, SEARCH_RESULTS)
-        return found_html(collection, rows, ms)
+            return no_results
+        rows, ms = timed(search_order, query, embeddings, MAX_RESULTS)
+        return Found([int(i) for i in rows], f'"{query.strip()}"', ms)
 
-    def search_by_image(image: Image.Image | None) -> str:
-        # an unreadable, truncated or too large file never gets here: gradio refuses it while decoding (adr/0023)
-        if image is None:
-            return found_html(collection, [])
-        rows, ms = timed(image_search_order, image, embeddings, SEARCH_RESULTS)
-        return found_html(collection, rows, ms)
+    def picture_found(img: Image.Image, subject: str) -> Found:
+        rows, ms = timed(image_search_order, img, embeddings, MAX_RESULTS)
+        return Found([int(i) for i in rows], subject, ms)
 
-    # uploads are written to gradio's cache, which is memory on Cloud Run: files older than 5 min go every 5 min
-    with gr.Blocks(title="Museum Guide", delete_cache=(300, 300)) as demo, gr.Column(elem_id="app"):
+    def cleanup_old_upload(old_filepath: str | None, current_filepath: str | None = None) -> None:
+        """Single-slot policy: remove previous uploaded file to avoid disk/RAM accumulation (adr/0023)."""
+        if old_filepath and old_filepath != current_filepath:
+            try:
+                p = Path(old_filepath)
+                if p.is_file():
+                    p.unlink(missing_ok=True)
+            except OSError:
+                log.warning("Could not delete the previous upload %s", old_filepath, exc_info=True)
+
+    # Every handler below returns the page and the Found it shows; the slider only re-cuts that Found.
+    def search_by_image(filepath: str | None, current_filepath: str | None, k: int):
+        cleanup_old_upload(current_filepath, filepath)
+        if not filepath:
+            return found_html(collection, no_results, k), "", None, no_results
+        try:
+            with Image.open(filepath) as img:
+                found = picture_found(img, "your picture")
+        except (OSError, ValueError):  # unreadable file, or a picture Pillow refuses (too large)
+            log.warning("Could not read the uploaded picture", exc_info=True)
+            gr.Warning("This picture could not be read. Try a JPEG or PNG under 5 MB.")
+            cleanup_old_upload(filepath)
+            return found_html(collection, no_results, k), "", None, no_results
+        return found_html(collection, found, k), "", filepath, found
+
+    def on_text_search(q: str, current_filepath: str | None, k: int):
+        cleanup_old_upload(current_filepath)
+        found = text_found(q)
+        return found_html(collection, found, k), None, None, found
+
+    def on_chip_search(text: str, current_filepath: str | None, k: int):
+        cleanup_old_upload(current_filepath)
+        found = text_found(text)
+        return text, found_html(collection, found, k), None, None, found
+
+    def on_clear_upload(current_filepath: str | None):
+        cleanup_old_upload(current_filepath)
+        return found_html(collection, no_results, 1), None, no_results
+
+    def on_slider_change(k: int, found: Found) -> str:
+        return found_html(collection, found, int(k))
+
+    def select_sidebar_example(picked_row: str, current_filepath: str | None, k: int):
+        cleanup_old_upload(current_filepath)
+        row = collection.loc[int(picked_row)]
+        image_path = str(BUNDLE / row["path"])
+        with Image.open(image_path) as img:
+            found = picture_found(img, "the painting you picked")
+        return image_path, found_html(collection, found, k), "", None, found
+
+    # uploads are written to gradio's cache, which is memory on Cloud Run: files older than 1 min go every 1 min
+    with gr.Blocks(title="Museum Guide", delete_cache=(60, 60)) as demo, gr.Column(elem_id="app"):
         gr.HTML('<div id="hero"><h1>Museum Guide</h1>'
                 '<p>Name the genre of a painting, or find paintings by describing or showing them.</p></div>')
         with gr.Tabs():
@@ -459,22 +674,53 @@ def build_app() -> gr.Blocks:
             with gr.Tab("2 · Ask"):
                 gr.HTML(tab_intro("Brief, point 2. The visitor asks in plain words, or shows a picture; the guide proposes "
                                   "the artworks of the collection that best match."))
-                with gr.Row(elem_id="search-row"):
-                    query = gr.Textbox(placeholder="a stormy sea with big waves", show_label=False,
-                                       container=False, scale=5, elem_id="query", max_length=MAX_QUERY_CHARS)
-                    go = gr.Button("Search", variant="primary", scale=1)
+                with gr.Column(elem_id="search-wrapper"):
+                    with gr.Row(elem_id="search-row"):
+                        query = gr.Textbox(placeholder="a stormy sea with big waves", show_label=False,
+                                           container=False, scale=5, elem_id="query", max_length=MAX_QUERY_CHARS)
+                        go = gr.Button("Search", variant="primary", scale=1)
+                        gr.Button("📷 By picture ▾", elem_id="image-toggle-btn", scale=1)
+
+                    with gr.Column(elem_id="image-popover"):
+                        uploaded_file = gr.State(None)
+                        last_found = gr.State(no_results)
+                        upload = gr.Image(type="filepath", sources=["upload"],
+                                          label="Drop a picture (up to 5 MB)",
+                                          height=180, elem_id="upload", buttons=[])
+                        gr.HTML('<div class="sidebar-header"><span>30 museum examples (click to search)</span>'
+                                '<div class="header-actions">'
+                                '<button id="refresh-examples-btn" class="refresh-btn" title="Sample 30 new paintings">↻ New sample</button>'
+                                '<button id="close-popover-btn" class="refresh-btn" title="Close">✕</button>'
+                                '</div></div>')
+                        example_list = gr.HTML(example_tiles_html(collection), elem_id="example-list")
+                        sidebar_picked = gr.Textbox(visible=False)
+                        sidebar_go = gr.Button("side-pick", elem_id="sidebar-go", elem_classes="sr-only")
+                        refresh_go = gr.Button("refresh-ex", elem_id="refresh-go", elem_classes="sr-only")
+
                 with gr.Row(elem_id="chips"):
                     chips = [gr.Button(q, elem_classes="chip", size="sm") for q in EXAMPLE_QUERIES]
-                upload = gr.Image(type="pil", sources=["upload"], label="Or show a picture (JPG, PNG or WebP, up to 10 MB)",
-                                  height=200, elem_id="upload", buttons=[])
-                found = gr.HTML(found_html(collection, []), elem_id="found")
-                # one search at a time: a text search clears the picture, a picture clears the text
-                go.click(lambda q: (search(q), None), query, [found, upload])
-                query.submit(lambda q: (search(q), None), query, [found, upload])
+                found = gr.HTML(found_html(collection, no_results, 5), elem_id="found")
+                k_slider = gr.Slider(minimum=1, maximum=MAX_RESULTS, step=1, value=5,
+                                     label="Number of artworks to display", elem_id="k-slider")
+
+                # Single-slot buffer: a text search clears and deletes the picture; an upload clears the text
+                text_io = ([query, uploaded_file, k_slider], [found, upload, uploaded_file, last_found])
+                go.click(on_text_search, *text_io)
+                query.submit(on_text_search, *text_io)
                 for chip, text in zip(chips, EXAMPLE_QUERIES):
-                    chip.click(lambda t=text: (t, search(t), None), None, [query, found, upload])
-                upload.upload(lambda im: (search_by_image(im), ""), upload, [found, query])
-                upload.clear(lambda: found_html(collection, []), None, found)
+                    chip.click(lambda f, k, t=text: on_chip_search(t, f, k), [uploaded_file, k_slider],
+                               [query, found, upload, uploaded_file, last_found])
+                upload.upload(search_by_image, [upload, uploaded_file, k_slider], [found, query, uploaded_file, last_found]).then(
+                    None, js="() => { document.querySelector('#image-popover')?.classList.remove('open');"
+                             " document.querySelector('#image-toggle-btn')?.classList.remove('active'); }")
+                upload.clear(on_clear_upload, [uploaded_file], [found, uploaded_file, last_found])
+                # cheap (no model call): re-cuts the last search, so it also works after an example, a drag or the cache cleanup
+                k_slider.change(on_slider_change, [k_slider, last_found], found, show_progress="hidden", trigger_mode="always_last")
+                sidebar_go.click(select_sidebar_example, [sidebar_picked, uploaded_file, k_slider],
+                                 [upload, found, query, uploaded_file, last_found],
+                                 # js= must return one value per input: the row, the state (kept by the server), the slider
+                                 js="(row, state, k) => [window.pickedExample, null, k]")
+                refresh_go.click(lambda: example_tiles_html(collection), None, example_list)
 
             with gr.Tab("3 · Info"):
                 gr.HTML(f'<div class="info">{brief_html()}'
@@ -492,7 +738,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     _load_siglip()  # load once at start-up, so the first search is not slow
     # queue limits keep a public deployment from being swamped: 2 jobs at a time, at most 16 waiting
+    import os
+    server_host = "0.0.0.0" if os.getenv("PORT") else "127.0.0.1"
     build_app().queue(default_concurrency_limit=MAX_CONCURRENT_JOBS, max_size=MAX_QUEUED_JOBS).launch(
-        server_name="0.0.0.0", server_port=args.port, share=args.share, theme=THEME, css=CSS, head=HEAD,
+        server_name=server_host, server_port=args.port, share=args.share, theme=THEME, css=CSS, head=HEAD,
         max_file_size=UPLOAD_LIMIT_BYTES,
         allowed_paths=[str(BUNDLE / "images"), str(BUNDLE / "thumbs")])  # only the paintings, not the code or weights
