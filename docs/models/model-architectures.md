@@ -6,6 +6,42 @@ Figures come from `src/deep_learning_project_waerniers_lamy_mahieddine/vision/ut
 [0016](../../adr/0016-dense-regularisation.md), [0017](../../adr/0017-feedforward-on-features.md),
 [0019](../../adr/0019-kiosk-int8.md)).
 
+## Reminder: the general techniques
+
+### Overfitting, and how we see it
+
+A model **overfits** when it learns the training images by heart instead of the rule behind them: training accuracy keeps
+rising while validation accuracy stalls or falls. Our clearest case is the dense baseline (P02): **98% on train, 39% on
+validation**. P12 even showed that it reaches 100% training accuracy on **shuffled labels**, where there is nothing to learn
+but the images themselves: pure memorisation. The gap between the train and validation curves is the symptom to look for.
+
+### Techniques against overfitting
+
+| technique | what it does | why it helps | in our project |
+|---|---|---|---|
+| **Early stopping** | keep the weights of the epoch with the best validation accuracy, not the last one | stops before the model starts memorising | used in every run (`fit` keeps the best epoch) |
+| **Weight decay (L2)** | adds a penalty on the size of the weights to the loss (`weight_decay` in Adam) | large weights fit noise; small weights give a smoother function | P13: no gain on the dense network (39.3% at best against 39.0%); P14: kept in the feature MLP |
+| **Dropout** | during training, sets a random share of the neurons to 0 at each step (here 0.2 or 0.5); off at prediction time | no neuron can rely on one specific other: the network learns redundant, more general features | P13: no gain on the dense network; P14: used in the MLP heads |
+| **Data augmentation** | random changes of the training images: crop, mirror, colour | the model sees more varied images, so it cannot memorise the exact pixels | P08: 4 augmented copies, 80.8% against 80.3% on the frozen ResNet (within the noise); P13: mirrored copies, best dense network (42.5%) |
+| **Fewer trainable parameters** | a smaller model has less capacity to memorise | the training set (1,920 images) is small | the reason for freezing the ResNet and for the CNN's weight sharing |
+| **Transfer learning** | start from a network pretrained on a large dataset (ImageNet, 1.2 million images) and reuse its features | the features were learned on far more images than we have, so they generalise | the biggest gain of the project: from about 60% (CNN) to 80 to 83% (ResNet-18) |
+| **Freezing / partial fine-tuning** | keep the early layers fixed and train only the last ones | fewer trainable weights, and the generic early features are not damaged | frozen ResNet: 2,565 trained parameters; final model: only layer4 and the output layer |
+| **Smaller learning rate for fine-tuning** | 1e-4 instead of 1e-3 when training pretrained layers | small steps adjust the pretrained weights without erasing them | final model, layer4 at 1e-4 |
+| **Global average pooling** | averages each feature map into one number instead of flattening every pixel | far fewer weights in the final layer | CNNs and ResNets: 64 or 512 inputs to the output layer instead of thousands |
+| **Weight sharing (convolution)** | the same small 3×3 filter slides over the whole image | far fewer parameters than a dense layer, and a pattern is recognised wherever it is | CNN: 23,909 parameters against 393,989 for the dense network, +22 points |
+
+### Techniques for training well (not against overfitting)
+
+| technique | what it does | why it helps | in our project |
+|---|---|---|---|
+| **Batch normalisation** | standardises the outputs of a layer over each batch (mean 0, std 1), then rescales them with 2 learned numbers | stabilises training, allows larger learning rates; a mild regularising side effect from the batch noise | P04: no gain on the small CNN (59.8%); built into every ResNet block |
+| **Residual connections** | a block outputs `F(x) + x`: it learns a correction added to its input | the gradient flows back through the `+ x` shortcut without shrinking, so very deep networks train | what makes ResNet-18 and ResNet-50 trainable; not a regulariser |
+| **Standardised inputs** | subtract the mean and divide by the std of each colour channel | every input on the same scale, gradients of a sane size | P12: raw 0-255 pixels killed 95 to 100% of the ReLUs; the ResNets use the ImageNet mean and std |
+| **ReLU activation** | `max(0, x)` instead of sigmoid or tanh | its gradient is 1 for positive inputs, so it does not vanish through many layers | P12: 6 sigmoid layers did not train, ReLU did |
+| **He initialisation** | starting weights with a spread scaled to the layer size, made for ReLUs | the activations keep the same spread from layer to layer | P12: a 10-layer network trained only with it |
+| **Gradient clipping** | caps the size of the gradient before each step | prevents one huge step from destroying the weights | P12: avoided NaN at a too-high learning rate |
+| **Adam optimiser** | gradient descent with a step size adapted per weight | trains reliably with little tuning | every run; P12 showed it can hide a bad learning rate |
+
 ## What every model shares
 
 - **Output:** always a final linear layer giving **5 scores (logits)**, one per genre. The softmax that turns them into
@@ -62,7 +98,7 @@ Figures come from `src/deep_learning_project_waerniers_lamy_mahieddine/vision/ut
 ```
 
 - **The "18"** counts the layers with weights: 1 first convolution + 4 stages × 2 blocks × 2 convolutions 3×3 (16) + the fc
-  layer = 18.
+  layer = 18. `layer1` to `layer4` are the names PyTorch gives to the 4 **stages**, not to single layers (see section 4).
 - **A residual block** is 2 convolutions 3×3 with batch norm, plus the shortcut `output = F(x) + x`. The gradient flows
   straight through the shortcut, which is what lets deep networks train without vanishing gradients.
 - **Frozen version:** the whole network is fixed and only the new 512→5 layer learns.
@@ -73,23 +109,97 @@ Figures come from `src/deep_learning_project_waerniers_lamy_mahieddine/vision/ut
 
 ## 4. ResNet-18 fine-tuned: the final model (P06, ADR 0012)
 
-The same network, but the **last stage (layer4) is unfrozen** as well as the new output layer:
+The same network, but the **last stage (layer4) is unfrozen** as well as the new output layer.
+
+**Careful with the word "layer".** In PyTorch, `layer1` to `layer4` are not single layers: they are the 4 **stages** of the
+network, each made of 2 residual blocks of 2 convolutions. The final model keeps **all 18 layers**, and every photo goes
+through all of them. "Fine-tuning layer4" means training the last stage, its 4 convolutions, plus the new output layer:
 
 ```
-conv1 → layer1 → layer2 → layer3     FROZEN (ImageNet weights)
-→ layer4                             TRAINED (starts from the ImageNet weights)
-→ global average pooling → Linear 512→5   TRAINED (new)
+conv1 (7×7)                              1 layer     FROZEN (ImageNet weights)
+layer1: 2 blocks × 2 conv 3×3            4 layers    FROZEN
+layer2: 2 blocks × 2 conv 3×3            4 layers    FROZEN
+layer3: 2 blocks × 2 conv 3×3            4 layers    FROZEN
+layer4: 2 blocks × 2 conv 3×3            4 layers    TRAINED (starts from the ImageNet weights)
+global average pooling                   (no weights)
+fc: Linear 512→5                         1 layer     TRAINED (new)
+                                        ─────────
+                                         18 layers: 13 frozen, 5 trained
 ```
+
+So 5 of the 18 layers are trained, but they hold **75% of the weights** (8.4 of 11.2 million): the last stage works on 512
+channels, so its convolutions are by far the largest. Detail: the first block of layer2, layer3 and layer4 also has a 1×1
+convolution in its shortcut, to change the number of channels (256 to 512 in layer4). It is trained along with layer4 but,
+by convention, not counted in the 18.
+
+**What is replaced, what is retrained.** Only the output layer is removed and replaced; layer4 is kept and retrained:
+
+| part | what happens when fine-tuning |
+|---|---|
+| conv1, layer1 to layer3 | **kept and frozen**: ImageNet weights, never changed |
+| layer4 | **kept, then retrained**: starts from its ImageNet weights, which training adjusts (learning rate 1e-4) |
+| fc | **removed and replaced**: ImageNet's `Linear 512→1000` (1,000 ImageNet classes) becomes a new `Linear 512→5` (our 5 genres), with random starting weights |
+
+Two different operations: `fc` must be **replaced** because its output has the wrong size (1,000 classes, not 5 genres);
+layer4 has the right shape and is only **unfrozen**, so that it can learn. In `build_resnet_head` (`vision/utils.py`):
+`copy.deepcopy(pretrained_resnet(arch).layer4)` keeps layer4 with its ImageNet weights, and `nn.Linear(n_features, n_classes)`
+creates the new fc. The frozen ResNet-18 makes the same replacement of `fc`; only its layer4 stays frozen.
+
+**From feature maps to genres.** The output is 5 scores, not 5 feature maps:
+
+```
+layer4      → 512 feature maps of 7×7 pixels        (what the convolutions produce)
+avg pooling → 512 features                          (each map averaged into one number)
+new fc      → 5 scores (logits), one per genre      (a weighted combination of the 512 features)
+softmax     → 5 probabilities                       (inside the loss during training)
+```
+
+**layer4 and fc learn together, not one after the other.** At every training step the genre error (cross-entropy loss) is
+backpropagated through fc, then through layer4, and **both are updated in the same step**:
+
+- **fc** learns *how to combine* the 512 features into a genre;
+- **layer4** learns *which features to compute*: its ImageNet features (made to tell a dog from a car) shift towards
+  features that tell a landscape from a cityscape;
+- the gradient stops at layer3: everything before it is frozen and does not change.
+
+**In one sentence:** we replace the 1,000-class output layer with a 5-genre one, and retrain the last stage together with
+it, so that its features adapt to paintings while the earlier, generic layers keep their ImageNet weights.
+
+### What makes it different from the frozen ResNet-18
+
+The difference is **what is allowed to change**: only the decision made on the features, or the features themselves.
+
+**Frozen ResNet-18 (P06): the features are fixed.**
+
+- layer4 outputs the same 512 features as on ImageNet, made to tell dogs, cars and cups apart, not paintings.
+- Only the new fc learns: it finds the best **linear combination** of these fixed 512 features to separate the 5 genres.
+- If two genres look alike *in ImageNet's features*, fc cannot fix it: it can only draw boundaries between points it cannot
+  move.
+- This is **feature extraction**: the ResNet is used as a fixed feature calculator.
+
+**Fine-tuned ResNet-18 (final model): the features adapt.**
+
+- layer4 is retrained with fc, so the 512 features themselves change: they move towards what separates a landscape from a
+  cityscape, or a religious painting from a portrait.
+- The points move, so fc can separate them better.
 
 | | ResNet-18 frozen | **ResNet-18 fine-tuned** |
 |---|---|---|
-| what learns | the output layer | layer4 + the output layer |
+| what learns | the output layer (fc) | layer4 + the output layer (fc) |
+| the 512 features | fixed (ImageNet) | **adapted to paintings** |
 | trained parameters | 2,565 | **8,396,293** (75% of the network) |
 | learning rate, epochs | 1e-3, 30 epochs | **1e-4**, 8 epochs (best epoch: 4) |
-| training time | a few seconds | about 10 minutes, once |
-| validation | 80.3% | **83.3%** (3 seeds) |
+| training time | the 512 features computed **once**, then a few seconds | the output of layer3 computed once, layer4 rerun at every epoch: about 10 minutes, once |
+| overfitting risk | very low | higher: 8.4 M weights for 1,920 images, hence the small learning rate, 8 epochs and the best epoch kept |
+| validation | 80.3% (5 seeds) | **83.3%** (3 seeds) |
 | museum B | 84.5% | **86.0%** |
 | time per photo, size | 70 ms, 45 MB | **the same**: same network, only the weights differ |
+
+**What to say:** fine-tuning costs nothing at prediction time, only 10 minutes of training once, and gains +3 points on
+validation, because the model no longer has to make do with features built for other images.
+
+**Careful with museum B:** the gain there is +1.5 points, inside the ±2.9-point margin. The choice was made on validation,
+as the protocol requires; do not present the museum B gain alone as proof.
 
 **Arguments to defend these choices:**
 
