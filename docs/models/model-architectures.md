@@ -65,9 +65,33 @@ but the images themselves: pure memorisation. The gap between the train and vali
 
 ## 2. Small CNNs (P03 to P05)
 
+**3 convolution layers, one per block** (not one convolution). The best CNN (`cnn_longer`, channels `[16, 32, 64]`):
+
 ```
-64×64×3 image → [Conv 3×3 → (BatchNorm) → ReLU → MaxPool 2×2] × 3 blocks → global average pooling → Linear 64→5
+input 64×64×3
+→ block 1: Conv 3×3, 3→16 channels  → ReLU → MaxPool 2×2   → 32×32×16
+→ block 2: Conv 3×3, 16→32 channels → ReLU → MaxPool 2×2   → 16×16×32
+→ block 3: Conv 3×3, 32→64 channels → ReLU → MaxPool 2×2   → 8×8×64
+→ global average pooling                                    → 64 values
+→ Linear 64→5                                               → 5 scores
 ```
+
+| layer | parameters |
+|---|---|
+| conv 1 (3→16) | 3 × 16 × 9 + 16 = 448 |
+| conv 2 (16→32) | 16 × 32 × 9 + 32 = 4,640 |
+| conv 3 (32→64) | 32 × 64 × 9 + 64 = 18,496 |
+| Linear 64→5 | 64 × 5 + 5 = 325 |
+| **total** | **23,909** |
+
+So **4 layers with weights**: 3 convolutions and the output layer (ReLU and pooling have no weights). A convolution's
+parameters are `inputs × outputs × 3 × 3` weights plus one bias per output channel.
+
+- **Each block doubles the channels** (more kinds of patterns detected) and **halves the image** (max pooling keeps the
+  largest value of each 2×2 square).
+- **The first filters see small details** (edges, colour contrasts); the later ones combine them into larger shapes,
+  because each pooling widens the area of the image that every filter covers.
+- The batch-norm variant adds a BatchNorm after each convolution; the deeper variant adds a 4th block (64→128 channels).
 
 | variant | blocks (channels) | parameters | validation | museum B |
 |---|---|---|---|---|
